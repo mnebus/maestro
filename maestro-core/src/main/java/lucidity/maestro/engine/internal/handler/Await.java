@@ -1,6 +1,7 @@
 package lucidity.maestro.engine.internal.handler;
 
 import lucidity.maestro.engine.api.throwable.AbortWorkflowExecutionError;
+import lucidity.maestro.engine.internal.MaestroImpl;
 import lucidity.maestro.engine.internal.dto.WorkflowContext;
 import lucidity.maestro.engine.internal.dto.WorkflowContextManager;
 import lucidity.maestro.engine.internal.entity.EventEntity;
@@ -14,25 +15,31 @@ import org.slf4j.LoggerFactory;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-import static lucidity.maestro.engine.internal.util.Util.applySignals;
-
 public class Await {
     private static final Logger logger = LoggerFactory.getLogger(Await.class);
+    private final MaestroImpl maestroImpl;
+    private final EventRepo eventRepo;
 
-    public static void await(Supplier<Boolean> condition) {
+    public Await(MaestroImpl maestroImpl, EventRepo eventRepo) {
+
+        this.maestroImpl = maestroImpl;
+        this.eventRepo = eventRepo;
+    }
+
+    public void await(Supplier<Boolean> condition) {
         WorkflowContext workflowContext = WorkflowContextManager.get();
         Long correlationNumber = WorkflowContextManager.getCorrelationNumber();
 
-        EventEntity existingCompletedAwait = EventRepo.get(workflowContext.workflowId(), correlationNumber, Status.COMPLETED);
+        EventEntity existingCompletedAwait = eventRepo.get(workflowContext.workflowId(), correlationNumber, Status.COMPLETED);
         if (existingCompletedAwait != null) {
-            applySignals(workflowContext, existingCompletedAwait.sequenceNumber());
+            maestroImpl.applySignals(workflowContext, existingCompletedAwait.sequenceNumber());
             return;
         }
 
         try {
-            EventRepo.saveWithRetry(() -> new EventEntity(
+            eventRepo.saveWithRetry(() -> new EventEntity(
                     UUID.randomUUID().toString(), workflowContext.workflowId(),
-                    correlationNumber, EventRepo.getNextSequenceNumber(workflowContext.workflowId()),
+                    correlationNumber, eventRepo.getNextSequenceNumber(workflowContext.workflowId()),
                     Category.AWAIT, null, null,
                     null, Status.STARTED, null, null
             ));
@@ -40,13 +47,13 @@ public class Await {
             logger.debug(e.getMessage());
         }
 
-        Long nextSequenceNumber = EventRepo.getNextSequenceNumber(workflowContext.workflowId());
-        applySignals(workflowContext, nextSequenceNumber);
+        Long nextSequenceNumber = eventRepo.getNextSequenceNumber(workflowContext.workflowId());
+        maestroImpl.applySignals(workflowContext, nextSequenceNumber);
 
         if (!condition.get()) {
-            EventRepo.saveWithRetry(() -> new EventEntity(
+            eventRepo.saveWithRetry(() -> new EventEntity(
                     UUID.randomUUID().toString(), workflowContext.workflowId(),
-                    correlationNumber, EventRepo.getNextSequenceNumber(workflowContext.workflowId()),
+                    correlationNumber, eventRepo.getNextSequenceNumber(workflowContext.workflowId()),
                     Category.AWAIT, null, null,
                     null, Status.UNSATISFIED, null, null
             ));
@@ -56,7 +63,7 @@ public class Await {
         }
 
         try {
-            EventRepo.saveWithRetry(() -> new EventEntity(
+            eventRepo.saveWithRetry(() -> new EventEntity(
                     UUID.randomUUID().toString(), workflowContext.workflowId(),
                     correlationNumber, nextSequenceNumber, Category.AWAIT,
                     null, null, null,

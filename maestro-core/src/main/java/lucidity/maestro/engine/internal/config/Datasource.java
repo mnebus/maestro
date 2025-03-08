@@ -9,7 +9,7 @@ public class Datasource {
 
     private static final HikariDataSource dataSource = initializeDataSource();
 
-    public static DataSource getDataSource() {
+    public DataSource getDataSource() {
         return dataSource;
     }
 

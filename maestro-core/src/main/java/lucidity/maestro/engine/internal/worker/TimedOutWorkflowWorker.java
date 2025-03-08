@@ -1,5 +1,6 @@
 package lucidity.maestro.engine.internal.worker;
 
+import lucidity.maestro.engine.internal.MaestroImpl;
 import lucidity.maestro.engine.internal.entity.EventEntity;
 import lucidity.maestro.engine.internal.repo.EventRepo;
 import lucidity.maestro.engine.internal.util.Util;
@@ -15,19 +16,28 @@ public class TimedOutWorkflowWorker {
     private static final Logger logger = LoggerFactory.getLogger(TimedOutWorkflowWorker.class);
     private static final AtomicBoolean started = new AtomicBoolean(false);
     private static final ExecutorService executor = Executors.newSingleThreadExecutor();
+    private final MaestroImpl maestroImpl;
+    private final EventRepo eventRepo;
 
-    public static void startPoll() {
+    public TimedOutWorkflowWorker(MaestroImpl maestroImpl, EventRepo eventRepo) {
+
+        this.maestroImpl = maestroImpl;
+        this.eventRepo = eventRepo;
+    }
+
+
+    public void startPoll() {
         if (started.get()) return;
 
-        executor.submit(TimedOutWorkflowWorker::poll);
+        executor.submit(this::poll);
 
         started.set(true);
     }
 
-    public static void poll() {
+    public void poll() {
         while (true) {
-            List<EventEntity> timedOutEvents = EventRepo.getTimedOutEvents();
-            timedOutEvents.forEach(TimedOutWorkflowWorker::logAndReplay);
+            List<EventEntity> timedOutEvents = eventRepo.getTimedOutEvents();
+            timedOutEvents.forEach(this::logAndReplay);
 
             try {
                 Thread.sleep(1000);
@@ -37,8 +47,8 @@ public class TimedOutWorkflowWorker {
         }
     }
 
-    private static void logAndReplay(EventEntity workflow) {
+    private void logAndReplay(EventEntity workflow) {
         logger.info("replaying workflow with id: {}", workflow.workflowId());
-        Util.replayWorkflow(workflow);
+        maestroImpl.replayWorkflow(workflow);
     }
 }

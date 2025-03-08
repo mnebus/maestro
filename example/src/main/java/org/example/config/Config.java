@@ -1,8 +1,10 @@
 package org.example.config;
 
 import jakarta.annotation.PostConstruct;
+import lucidity.maestro.engine.MaestroService;
 import lucidity.maestro.engine.api.Maestro;
 import lucidity.maestro.engine.api.activity.ActivityOptions;
+import lucidity.maestro.engine.internal.MaestroImpl;
 import org.example.activity.impl.InventoryActivityImpl;
 import org.example.activity.impl.NotificationActivityImpl;
 import org.example.activity.impl.PaymentActivityImpl;
@@ -23,11 +25,16 @@ public class Config {
 
     @PostConstruct
     public void init() {
-        Maestro.registerWorkflowImplementationTypes(OrderWorkflowImpl.class);
 
-        Maestro.registerActivity(new InventoryActivityImpl());
-        Maestro.registerActivity(new NotificationActivityImpl(emailService));
-        Maestro.registerActivity(
+        Maestro maestro = MaestroService.builder()
+                .configureDataSource(System.getenv("MAESTRO_DB_USERNAME"), System.getenv("MAESTRO_DB_PASSWORD"), System.getenv("MAESTRO_DB_URL"))
+                .build();
+
+        maestro.registerWorkflowImplementationTypes(OrderWorkflowImpl.class);
+
+        maestro.registerActivity(new InventoryActivityImpl());
+        maestro.registerActivity(new NotificationActivityImpl(emailService));
+        maestro.registerActivity(
                 new PaymentActivityImpl(),
                 new ActivityOptions(Duration.ofMinutes(1)) // Activity will be retried if it hasn't completed one minute after starting
         );

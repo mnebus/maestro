@@ -1,5 +1,6 @@
 package org.example.api;
 
+import lucidity.maestro.engine.MaestroService;
 import lucidity.maestro.engine.api.Maestro;
 import lucidity.maestro.engine.api.workflow.WorkflowOptions;
 import org.example.workflow.OrderWorkflow;
@@ -16,13 +17,13 @@ public class Controller {
 
     @PostMapping("/order/{orderId}")
     public void order(@PathVariable String orderId, @RequestBody Order order) throws ExecutionException, InterruptedException {
-        OrderWorkflow workflow = Maestro.newWorkflow(OrderWorkflowImpl.class, new WorkflowOptions(orderId));
+        OrderWorkflow workflow = MaestroService.newWorkflow(OrderWorkflowImpl.class, new WorkflowOptions(orderId));
         workflow.submitOrder(order);
     }
 
     @PostMapping("/confirmation/{trackingNumber}")
     public void signalWorkflow(@PathVariable String trackingNumber, @RequestBody ShippingConfirmation shippingConfirmation) {
-        OrderWorkflow workflow = Maestro.newWorkflow(OrderWorkflowImpl.class, new WorkflowOptions(trackingNumber));
+        OrderWorkflow workflow = MaestroService.newWorkflow(OrderWorkflowImpl.class, new WorkflowOptions(trackingNumber));
         workflow.confirmShipped(shippingConfirmation);
     }
 }

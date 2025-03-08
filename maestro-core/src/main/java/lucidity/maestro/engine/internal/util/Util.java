@@ -21,7 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class Util {
-    private static final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
     private static final Set<String> METHODS_TO_SKIP = Set.of(
             "toString",
             "hashCode",
@@ -55,48 +55,6 @@ public class Util {
             }
         }
         return null;
-    }
-
-    public static void applySignals(WorkflowContext workflowContext, Long nextSequenceNumber) {
-        Object workflow = workflowContext.workflow();
-        List<EventEntity> signals = EventRepo.getSignals(workflowContext.workflowId(), nextSequenceNumber);
-        for (EventEntity signal : signals) {
-            Method signalMethod = Arrays.stream(workflow.getClass().getMethods())
-                    .filter(m -> m.getName().equals(signal.functionName()))
-                    .findFirst().get();
-
-            Type[] paramTypes = signalMethod.getGenericParameterTypes();
-            Object[] finalArgs = Arrays.stream(paramTypes)
-                    .findFirst()
-                    .map(paramType -> Json.deserialize(signal.data(), paramType))
-                    .map(deserialized -> new Object[]{deserialized})
-                    .orElse(Util.getDefaultArgs(paramTypes.length));
-
-            try {
-                signalMethod.invoke(workflow, finalArgs);
-            } catch (RuntimeException e) {
-                throw e;
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-    }
-
-    public static void replayWorkflow(EventEntity workflowStartedEvent) {
-        Class<?> workflowClass = MaestroImpl.getWorkflowImplType(workflowStartedEvent.className());
-        Method workflowMethod = Util.findWorkflowMethod(workflowClass);
-
-        Type[] paramTypes = workflowMethod.getGenericParameterTypes();
-        Object[] finalArgs = Arrays.stream(paramTypes)
-                .findFirst()
-                .map(paramType -> Json.deserialize(workflowStartedEvent.data(), paramType))
-                .map(deserialized -> new Object[]{deserialized})
-                .orElse(getDefaultArgs(paramTypes.length));
-
-        WorkflowOptions workflowOptions = Json.deserialize(workflowStartedEvent.metadata(), WorkflowOptions.class);
-        Object proxy = Maestro.newWorkflow(workflowClass, workflowOptions);
-
-        executor.submit(() -> workflowMethod.invoke(proxy, finalArgs));
     }
 
     public static Object[] getDefaultArgs(Integer numberOfParameters) {

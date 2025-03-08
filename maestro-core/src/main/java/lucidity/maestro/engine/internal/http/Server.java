@@ -20,7 +20,13 @@ import java.util.concurrent.Executors;
 public class Server {
     private static final Logger logger = LoggerFactory.getLogger(Await.class);
 
-    public static void serve() {
+    private EventRepo eventRepo;
+
+    public Server(EventRepo eventRepo) {
+        this.eventRepo = eventRepo;
+    }
+
+    public void serve() {
         try {
             HttpServer server = HttpServer.create(new InetSocketAddress(8000), 0);
 
@@ -77,7 +83,7 @@ public class Server {
         return "application/octet-stream";
     }
 
-    private static void handleGetWorkflows(HttpExchange exchange) throws IOException {
+    private void handleGetWorkflows(HttpExchange exchange) throws IOException {
         String[] pathParts = exchange.getRequestURI().getPath().split("/");
 
         if (pathParts.length == 3) handleGetAllWorkflows(exchange);
@@ -85,14 +91,14 @@ public class Server {
         else sendInvalidPathResponse(exchange);
     }
 
-    private static void handleGetAllWorkflows(HttpExchange exchange) throws IOException {
-        List<WorkflowModel> workflowModels = EventRepo.getWorkflows();
+    private void handleGetAllWorkflows(HttpExchange exchange) throws IOException {
+        List<WorkflowModel> workflowModels = eventRepo.getWorkflows();
         String json = Json.serialize(workflowModels);
         sendJsonResponse(exchange, 200, json);
     }
 
-    private static void handleGetWorkflowById(HttpExchange exchange, String id) throws IOException {
-        List<EventModel> eventModels = EventRepo.get(id);
+    private void handleGetWorkflowById(HttpExchange exchange, String id) throws IOException {
+        List<EventModel> eventModels = eventRepo.get(id);
         String json = Json.serialize(eventModels);
         sendJsonResponse(exchange, 200, json);
     }

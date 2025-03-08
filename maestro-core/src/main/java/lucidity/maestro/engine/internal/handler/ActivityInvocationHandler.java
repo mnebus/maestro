@@ -2,6 +2,7 @@ package lucidity.maestro.engine.internal.handler;
 
 import lucidity.maestro.engine.api.activity.ActivityOptions;
 import lucidity.maestro.engine.api.throwable.AbortWorkflowExecutionError;
+import lucidity.maestro.engine.internal.MaestroImpl;
 import lucidity.maestro.engine.internal.dto.WorkflowContext;
 import lucidity.maestro.engine.internal.dto.WorkflowContextManager;
 import lucidity.maestro.engine.internal.entity.Category;
@@ -20,10 +21,21 @@ import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.UUID;
 
-import static lucidity.maestro.engine.internal.util.Util.applySignals;
-
-public record ActivityInvocationHandler(Object target, ActivityOptions options) implements InvocationHandler {
+public class ActivityInvocationHandler implements InvocationHandler {
     private static final Logger logger = LoggerFactory.getLogger(ActivityInvocationHandler.class);
+    private final Object target;
+    private final ActivityOptions options;
+    private final MaestroImpl maestroImpl;
+
+    private final EventRepo eventRepo;
+
+    public ActivityInvocationHandler(Object target, ActivityOptions options, MaestroImpl maestroImpl, EventRepo eventRepo) {
+
+        this.target = target;
+        this.options = options;
+        this.maestroImpl = maestroImpl;
+        this.eventRepo = eventRepo;
+    }
 
     @Override
     public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
@@ -32,18 +44,18 @@ public record ActivityInvocationHandler(Object target, ActivityOptions options) 
         WorkflowContext workflowContext = WorkflowContextManager.get();
         Long correlationNumber = WorkflowContextManager.getCorrelationNumber();
 
-        EventEntity existingCompletedActivity = EventRepo.get(workflowContext.workflowId(), correlationNumber, Status.COMPLETED);
+        EventEntity existingCompletedActivity = eventRepo.get(workflowContext.workflowId(), correlationNumber, Status.COMPLETED);
 
         if (existingCompletedActivity != null) {
-            applySignals(workflowContext, existingCompletedActivity.sequenceNumber());
+            maestroImpl.applySignals(workflowContext, existingCompletedActivity.sequenceNumber());
             if (method.getReturnType().equals(Void.TYPE)) return existingCompletedActivity.data();
             return Json.deserialize(existingCompletedActivity.data(), method.getGenericReturnType());
         }
 
         try {
-            EventRepo.saveWithRetry(() -> new EventEntity(
+            eventRepo.saveWithRetry(() -> new EventEntity(
                     UUID.randomUUID().toString(), workflowContext.workflowId(),
-                    correlationNumber, EventRepo.getNextSequenceNumber(workflowContext.workflowId()),
+                    correlationNumber, eventRepo.getNextSequenceNumber(workflowContext.workflowId()),
                     Category.ACTIVITY, target.getClass().getSimpleName(), method.getName(),
                     Json.serializeFirst(args), Status.STARTED, null, Json.serialize(options)
             ));
@@ -51,7 +63,7 @@ public record ActivityInvocationHandler(Object target, ActivityOptions options) 
             logger.debug(e.getMessage());
         }
 
-        EventEntity existingStartedActivity = EventRepo.get(workflowContext.workflowId(), correlationNumber, Status.STARTED);
+        EventEntity existingStartedActivity = eventRepo.get(workflowContext.workflowId(), correlationNumber, Status.STARTED);
 
         Type[] paramTypes = method.getGenericParameterTypes();
         Object[] finalArgs = Arrays.stream(paramTypes)
@@ -67,13 +79,13 @@ public record ActivityInvocationHandler(Object target, ActivityOptions options) 
         return output;
     }
 
-    private static void applySignalsAndCompleteActivity(
+    private void applySignalsAndCompleteActivity(
             WorkflowContext workflowContext, Long correlationNumber,
             Object target, Method method, Object output
     ) {
         try {
-            EventRepo.saveWithRetry(() -> {
-                Long nextSequenceNumber = EventRepo.getNextSequenceNumber(workflowContext.workflowId());
+            eventRepo.saveWithRetry(() -> {
+                Long nextSequenceNumber = eventRepo.getNextSequenceNumber(workflowContext.workflowId());
 
                 EventEntity eventEntity = new EventEntity(
                         UUID.randomUUID().toString(), workflowContext.workflowId(),
@@ -82,7 +94,7 @@ public record ActivityInvocationHandler(Object target, ActivityOptions options) 
                         Json.serialize(output), Status.COMPLETED, null, null
                 );
 
-                applySignals(workflowContext, nextSequenceNumber);
+                maestroImpl.applySignals(workflowContext, nextSequenceNumber);
 
                 return eventEntity;
             });
