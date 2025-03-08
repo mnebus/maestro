@@ -16,14 +16,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
 
-import static lucidity.maestro.engine.internal.config.Datasource.getDataSource;
 import static lucidity.maestro.engine.internal.repo.SqlQueries.*;
 
 public class EventRepo {
-    private static final Logger logger = LoggerFactory.getLogger(EventRepo.class);
-    private static final DataSource dataSource = getDataSource();
 
-    public static List<WorkflowModel> getWorkflows() {
+    private static final Logger logger = LoggerFactory.getLogger(EventRepo.class);
+    private final DataSource dataSource;
+
+    public EventRepo(DataSource dataSource) {
+        this.dataSource = dataSource;
+    }
+
+    public List<WorkflowModel> getWorkflows() {
         List<WorkflowModel> workflowModels = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(SELECT_WORKFLOWS)) {
@@ -40,7 +44,7 @@ public class EventRepo {
         return workflowModels;
     }
 
-    public static List<EventModel> get(String workflowId) {
+    public List<EventModel> get(String workflowId) {
         List<EventModel> eventModels = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(SELECT_EVENTS_BY_WORKFLOW_ID)) {
@@ -60,7 +64,7 @@ public class EventRepo {
         return eventModels;
     }
 
-    public static EventEntity get(String workflowId, Long correlationNumber, Status status) {
+    public EventEntity get(String workflowId, Long correlationNumber, Status status) {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(SELECT_EVENT_BY_CORRELATION_NO)) {
 
@@ -77,7 +81,7 @@ public class EventRepo {
         }
     }
 
-    public static EventEntity get(String workflowId, Category category, Status status) {
+    public EventEntity get(String workflowId, Category category, Status status) {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(SELECT_EVENT)) {
 
@@ -94,7 +98,7 @@ public class EventRepo {
         }
     }
 
-    public static List<EventEntity> getSignals(String workflowId, Long sequenceNumber) {
+    public List<EventEntity> getSignals(String workflowId, Long sequenceNumber) {
         List<EventEntity> signals = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(SELECT_SIGNALS)) {
@@ -116,7 +120,7 @@ public class EventRepo {
         return signals;
     }
 
-    public static List<EventEntity> getTimedOutEvents() {
+    public List<EventEntity> getTimedOutEvents() {
         List<EventEntity> eventEntities = new ArrayList<>();
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(SELECT_TIMED_OUT_EVENTS)) {
@@ -132,7 +136,7 @@ public class EventRepo {
         return eventEntities;
     }
 
-    public static Long getNextSequenceNumber(String workflowId) {
+    public Long getNextSequenceNumber(String workflowId) {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(MAX_SEQUENCE_NUMBER)) {
 
@@ -147,7 +151,7 @@ public class EventRepo {
         return 1L;
     }
 
-    public static void saveWithRetry(Supplier<EventEntity> eventSupplier) {
+    public void saveWithRetry(Supplier<EventEntity> eventSupplier) {
         try {
             Retry.decorateCheckedRunnable(RetryConfiguration.getRetry(), () -> save(eventSupplier.get())).run();
         } catch (RuntimeException e) {
@@ -159,7 +163,7 @@ public class EventRepo {
         }
     }
 
-    private static void save(EventEntity eventEntity) throws SQLException, WorkflowCorrelationStatusConflict, WorkflowSequenceConflict {
+    private void save(EventEntity eventEntity) throws SQLException, WorkflowCorrelationStatusConflict, WorkflowSequenceConflict {
         try (Connection connection = dataSource.getConnection();
              PreparedStatement preparedStatement = connection.prepareStatement(INSERT_EVENT)) {
 

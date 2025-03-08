@@ -4,19 +4,19 @@ import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
 import com.github.kagkarlsson.scheduler.task.helper.Tasks;
 import lucidity.maestro.engine.api.throwable.AbortWorkflowExecutionError;
+import lucidity.maestro.engine.internal.MaestroImpl;
 import lucidity.maestro.engine.internal.dto.WorkflowContext;
 import lucidity.maestro.engine.internal.dto.WorkflowContextManager;
+import lucidity.maestro.engine.internal.entity.Category;
 import lucidity.maestro.engine.internal.entity.EventEntity;
+import lucidity.maestro.engine.internal.entity.Status;
 import lucidity.maestro.engine.internal.exception.WorkflowCorrelationStatusConflict;
 import lucidity.maestro.engine.internal.repo.EventRepo;
 import lucidity.maestro.engine.internal.util.Json;
-import lucidity.maestro.engine.internal.util.Util;
-import lucidity.maestro.engine.internal.config.Datasource;
-import lucidity.maestro.engine.internal.entity.Category;
-import lucidity.maestro.engine.internal.entity.Status;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.sql.DataSource;
 import java.io.Serializable;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,23 +24,31 @@ import java.util.UUID;
 
 public class Sleep {
     private static final Logger logger = LoggerFactory.getLogger(Sleep.class);
-    private static final OneTimeTask<SleepData> task = initializeTask();
-    private static final Scheduler scheduler = initializeScheduler();
+    private final OneTimeTask<SleepData> task = initializeTask();
+    private final Scheduler scheduler;
+    private final MaestroImpl maestroImpl;
+    private final EventRepo eventRepo;
 
-    public static void sleep(Duration duration) {
+    public Sleep(MaestroImpl maestroImpl, EventRepo eventRepo, DataSource dataSource) {
+        this.scheduler = this.initializeScheduler(dataSource);
+        this.maestroImpl = maestroImpl;
+        this.eventRepo = eventRepo;
+    }
+
+    public void sleep(Duration duration) {
         WorkflowContext workflowContext = WorkflowContextManager.get();
         Long correlationNumber = WorkflowContextManager.getCorrelationNumber();
 
-        EventEntity existingCompletedSleep = EventRepo.get(workflowContext.workflowId(), correlationNumber, Status.COMPLETED);
+        EventEntity existingCompletedSleep = eventRepo.get(workflowContext.workflowId(), correlationNumber, Status.COMPLETED);
         if (existingCompletedSleep != null) {
-            Util.applySignals(workflowContext, existingCompletedSleep.sequenceNumber());
+            maestroImpl.applySignals(workflowContext, existingCompletedSleep.sequenceNumber());
             return;
         }
 
         try {
-            EventRepo.saveWithRetry(() -> new EventEntity(
+            eventRepo.saveWithRetry(() -> new EventEntity(
                     UUID.randomUUID().toString(), workflowContext.workflowId(),
-                    correlationNumber, EventRepo.getNextSequenceNumber(workflowContext.workflowId()),
+                    correlationNumber, eventRepo.getNextSequenceNumber(workflowContext.workflowId()),
                     Category.SLEEP, null, null,
                     Json.serialize(duration), Status.STARTED, null, null
             ));
@@ -55,11 +63,11 @@ public class Sleep {
         throw new AbortWorkflowExecutionError("Scheduled Sleep");
     }
 
-    private static void completeSleep(String workflowId, Long correlationNumber) {
-        Long nextSequenceNumber = EventRepo.getNextSequenceNumber(workflowId);
+    private void completeSleep(String workflowId, Long correlationNumber) {
+        Long nextSequenceNumber = eventRepo.getNextSequenceNumber(workflowId);
 
         try {
-            EventRepo.saveWithRetry(() -> new EventEntity(
+            eventRepo.saveWithRetry(() -> new EventEntity(
                     UUID.randomUUID().toString(), workflowId,
                     correlationNumber, nextSequenceNumber, Category.SLEEP,
                     null, null, null,
@@ -69,14 +77,14 @@ public class Sleep {
             logger.debug(e.getMessage());
         }
 
-        EventEntity existingStartedWorkflow = EventRepo.get(
+        EventEntity existingStartedWorkflow = eventRepo.get(
                 workflowId, Category.WORKFLOW, Status.STARTED
         );
 
-        Util.replayWorkflow(existingStartedWorkflow);
+        maestroImpl.replayWorkflow(existingStartedWorkflow);
     }
 
-    private static OneTimeTask<SleepData> initializeTask() {
+    private OneTimeTask<SleepData> initializeTask() {
         return Tasks.oneTime("generic-task", SleepData.class)
                 .execute((inst, ctx) -> {
                     logger.info("completing sleep");
@@ -85,9 +93,9 @@ public class Sleep {
                 });
     }
 
-    private static Scheduler initializeScheduler() {
+    private Scheduler initializeScheduler(DataSource dataSource) {
         Scheduler scheduler = Scheduler
-                .create(Datasource.getDataSource(), task)
+                .create(dataSource, task)
                 .registerShutdownHook()
                 .build();
 

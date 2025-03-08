@@ -1,12 +1,12 @@
 package org.example.workflow;
 
-import org.example.activity.model.ProductInventory;
-import lucidity.maestro.engine.api.async.Async;
-import lucidity.maestro.engine.api.workflow.Workflow;
+import lucidity.maestro.engine.MaestroService;
 import lucidity.maestro.engine.api.activity.Activity;
+import lucidity.maestro.engine.api.async.Async;
 import org.example.activity.interfaces.InventoryActivity;
 import org.example.activity.interfaces.NotificationActivity;
 import org.example.activity.interfaces.PaymentActivity;
+import org.example.activity.model.ProductInventory;
 import org.example.workflow.model.Order;
 import org.example.workflow.model.OrderFinalized;
 import org.example.workflow.model.OrderedProduct;
@@ -39,7 +39,7 @@ public class OrderWorkflowImpl implements OrderWorkflow {
 
         notificationActivity.sendOrderConfirmedEmail();
 
-        Workflow.await(() -> trackingNumber != null);
+        MaestroService.await(() -> trackingNumber != null);
 
         // executing the following two activities in parallel
         CompletableFuture<String> emailResultFuture = Async.function(() -> notificationActivity.sendOrderShippedEmail(trackingNumber));
@@ -49,7 +49,7 @@ public class OrderWorkflowImpl implements OrderWorkflow {
         emailResultFuture.get();
         List<ProductInventory> newInventoryLevel = newInventoryFuture.get();
 
-        Workflow.sleep(Duration.ofSeconds(10)); // this can be as long as you like
+        MaestroService.sleep(Duration.ofSeconds(10)); // this can be as long as you like
 
         notificationActivity.sendSpecialOfferPushNotification();
 
