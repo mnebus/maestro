@@ -4,10 +4,7 @@ import lucidity.maestro.engine.api.Maestro;
 import lucidity.maestro.engine.api.workflow.WorkflowOptions;
 import lucidity.maestro.engine.internal.entity.Category;
 import lucidity.maestro.engine.internal.entity.EventModel;
-import lucidity.maestro.engine.util.ExampleSimpleWorkflow;
-import lucidity.maestro.engine.util.ExampleSimpleWorkflowImpl;
-import lucidity.maestro.engine.util.ExampleWorkflowWithSignal;
-import lucidity.maestro.engine.util.ExampleWorkflowWithSignalImpl;
+import lucidity.maestro.engine.util.*;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -117,6 +114,54 @@ public class AcceptanceTest {
         assertEquals(workflowId, events.get(2).workflowId());
         assertEquals(Category.SIGNAL, events.get(2).category());
         assertEquals("true", events.get(2).input());
+
+
+    }
+
+
+    @Test
+    void testWorkflowWithActivity() throws Exception {
+        // given a running postgres container
+        Assertions.assertTrue(postgresqlContainer.isRunning());
+
+        // and a configured maestro
+        Maestro maestro = MaestroService.builder()
+                .configureDataSource(postgresqlContainer.getUsername(), postgresqlContainer.getPassword(), postgresqlContainer.getJdbcUrl())
+                .build();
+        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithActivityImpl.class);
+        maestro.registerActivity(new ExampleMathActivityImpl());
+
+        // when we create a workflow
+        String workflowId = "example-workflow-with-activity-id";
+        ExampleWorkflowWithActivity exampleWorkflowWithActivity = MaestroService.newWorkflow(ExampleWorkflowWithActivityImpl.class, new WorkflowOptions(workflowId));
+        // and execute the workflow
+        ExampleWorkflowWithActivity.ExampleWorkflowWithActivityParam param = new ExampleWorkflowWithActivity.ExampleWorkflowWithActivityParam(100, 2L, 20L);
+        String output = exampleWorkflowWithActivity.execute(param);
+
+        // then the workflow executes as expected
+        // 100 x 2 - 20 = 180
+        assertEquals("180", output);
+
+        // and an event is created in the database
+        List<EventModel> events = MaestroService.getWorkflowEvents(workflowId);
+        assertEquals(3, events.size()); // 1 workflow and 2 activity is 3 total
+        assertEquals(workflowId, events.get(0).workflowId());
+        assertEquals("""
+                {"startWith":100,"multiplyBy":2,"subtractBy":20}""", events.get(0).input());
+        assertEquals("\"180\"", events.get(0).output());
+        assertEquals("execute", events.get(0).functionName());
+        assertEquals("ExampleWorkflowWithActivityImpl", events.get(0).className());
+        assertNotNull(events.get(0).startTimestamp());
+        assertNotNull(events.get(0).endTimestamp());
+        assertEquals(Category.WORKFLOW, events.get(0).category());
+
+        // and there are 2 activity events
+        assertEquals(Category.ACTIVITY, events.get(1).category());
+        assertEquals("multiply", events.get(1).functionName());
+
+        assertEquals(Category.ACTIVITY, events.get(2).category());
+        assertEquals("subtract", events.get(2).functionName());
+
 
 
     }
