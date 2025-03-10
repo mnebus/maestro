@@ -140,7 +140,7 @@ public class AcceptanceTest {
         assertEquals(3, events.size()); // 1 workflow and 2 activity is 3 total
         assertEquals(workflowId, events.get(0).workflowId());
         assertEquals("""
-                {"startWith":100,"multiplyBy":2,"subtract   ":20}""", events.get(0).input());
+                {"startWith":100,"multiplyBy":2,"subtract":20}""", events.get(0).input());
         assertEquals("\"180\"", events.get(0).output());
         assertEquals("execute", events.get(0).functionName());
         assertEquals("ExampleWorkflowWithActivityImpl", events.get(0).className());
@@ -193,15 +193,42 @@ public class AcceptanceTest {
         assertEquals(Category.SLEEP, events.get(1).category());
         assertNull(events.get(1).endTimestamp());
 
-        // then there will eventually be 3 events
+        // then the workflow will eventually complete
         Awaitility.await().atMost(5, TimeUnit.SECONDS)
-                .until(() -> MaestroService.getWorkflowEvents(workflowId).get(1).endTimestamp() != null);
+                .until(() -> MaestroService.getWorkflowEvents(workflowId).get(0).endTimestamp() != null);
         events = MaestroService.getWorkflowEvents(workflowId);
 
         // and WORKFLOW will be complete with the correct output
-        assertNotNull(events.get(0).endTimestamp());
         assertEquals("\"123\"", events.get(0).output());
 
+    }
+
+    @Test
+    void testWorkflowWithAsync() throws Exception {
+        // given a configured maestro
+        Maestro maestro = MaestroService.builder()
+                .configureDataSource(postgresqlContainer.getUsername(), postgresqlContainer.getPassword(), postgresqlContainer.getJdbcUrl())
+                .build();
+        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithAsyncImpl.class);
+        maestro.registerActivity(new ExampleAsyncActivityImpl());
+
+        // when we create a workflow
+        String workflowId = "example-workflow-with-async";
+        ExampleWorkflowWithAsync exampleWorkflowWithActivity = MaestroService.newWorkflow(ExampleWorkflowWithAsyncImpl.class, new WorkflowOptions(workflowId));
+        // and execute the workflow
+        String output = exampleWorkflowWithActivity.execute(55);
+
+        // then we get the expected output
+        assertEquals("param: [55] oneSecondEcho: [1-second-echo] twoSecondEcho: [2-second-echo]", output);
+
+        // and the expected number of events
+        List<EventModel> events = MaestroService.getWorkflowEvents(workflowId);
+        assertEquals(3, events.size());
+
+        // and the 1st activity starts before the 2nd activity
+        assertTrue(events.get(1).startTimestamp().isBefore(events.get(2).startTimestamp()));
+        // but the 2nd activity finished before the 1st activity
+        assertTrue(events.get(2).endTimestamp().isBefore(events.get(1).endTimestamp()));
     }
 
 
