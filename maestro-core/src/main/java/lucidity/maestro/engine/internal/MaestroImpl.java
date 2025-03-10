@@ -8,6 +8,7 @@ import lucidity.maestro.engine.api.workflow.WorkflowActions;
 import lucidity.maestro.engine.api.workflow.WorkflowOptions;
 import lucidity.maestro.engine.internal.dto.WorkflowContext;
 import lucidity.maestro.engine.internal.entity.EventEntity;
+import lucidity.maestro.engine.internal.entity.EventModel;
 import lucidity.maestro.engine.internal.handler.ActivityInvocationHandler;
 import lucidity.maestro.engine.internal.handler.WorkflowInvocationHandler;
 import lucidity.maestro.engine.internal.repo.EventRepo;
@@ -38,6 +39,10 @@ public class MaestroImpl implements Maestro {
     public MaestroImpl(EventRepo eventRepo, DataSource dataSource) {
         this.workflowActions = new WorkflowActions.WorkflowActionsImpl(this, eventRepo, dataSource);
         this.eventRepo = eventRepo;
+    }
+
+    public List<EventModel> getWorkflowEvents(String workflowId) {
+        return eventRepo.get(workflowId);
     }
 
     public void registerWorkflowImplementationTypes(Class<?>... workflowImplementationClasses) {

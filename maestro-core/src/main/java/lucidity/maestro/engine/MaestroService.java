@@ -6,6 +6,7 @@ import lucidity.maestro.engine.api.Maestro;
 import lucidity.maestro.engine.api.workflow.WorkflowOptions;
 import lucidity.maestro.engine.internal.MaestroImpl;
 import lucidity.maestro.engine.internal.config.Initializer;
+import lucidity.maestro.engine.internal.entity.EventModel;
 import lucidity.maestro.engine.internal.handler.Await;
 import lucidity.maestro.engine.internal.repo.EventRepo;
 import org.flywaydb.core.Flyway;
@@ -15,6 +16,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.time.Duration;
+import java.util.List;
 import java.util.function.Supplier;
 
 public class MaestroService {
@@ -36,6 +38,10 @@ public class MaestroService {
 
     public static <T> T newWorkflow(Class<T> clazz, WorkflowOptions options) {
         return serviceInstance.newWorkflow(clazz, options);
+    }
+
+    public static List<EventModel> getWorkflowEvents(String workflowId) {
+        return serviceInstance.getWorkflowEvents(workflowId);
     }
 
     public static MaestroServiceBuilder builder() {

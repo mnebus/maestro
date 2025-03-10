@@ -9,6 +9,7 @@ java {
 
 val jacksonVersion = "2.17.2"
 val flywayVersion = "11.3.4"
+val testcontainersVersion = "1.20.6"
 
 dependencies {
     implementation("org.postgresql:postgresql:42.7.3")
@@ -28,6 +29,13 @@ dependencies {
 
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
+    // https://mvnrepository.com/artifact/org.testcontainers/postgresql
+    testImplementation("org.testcontainers:postgresql:$testcontainersVersion")
+    // https://mvnrepository.com/artifact/org.awaitility/awaitility
+    testImplementation("org.awaitility:awaitility:4.3.0")
+
+
 }
 
 tasks.withType<Test> {
