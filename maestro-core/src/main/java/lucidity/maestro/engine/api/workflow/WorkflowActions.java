@@ -1,6 +1,5 @@
 package lucidity.maestro.engine.api.workflow;
 
-import lucidity.maestro.engine.MaestroService;
 import lucidity.maestro.engine.internal.MaestroImpl;
 import lucidity.maestro.engine.internal.handler.Await;
 import lucidity.maestro.engine.internal.handler.Sleep;
@@ -10,18 +9,18 @@ import javax.sql.DataSource;
 import java.time.Duration;
 import java.util.function.Supplier;
 
-public interface Workflow {
+public interface WorkflowActions {
 
     void await(Supplier<Boolean> condition);
 
     void sleep(Duration duration);
 
-    static class WorkflowImpl implements Workflow {
+    static class WorkflowActionsImpl implements WorkflowActions {
 
         private Sleep sleep;
         private Await await;
 
-        public WorkflowImpl(MaestroImpl maestroImpl, EventRepo eventRepo, DataSource dataSource) {
+        public WorkflowActionsImpl(MaestroImpl maestroImpl, EventRepo eventRepo, DataSource dataSource) {
             this.sleep = new Sleep(maestroImpl, eventRepo, dataSource);
             this.await = new Await(maestroImpl,eventRepo);
         }

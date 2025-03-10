@@ -54,8 +54,9 @@ View all of your workflows and workflow events at http://localhost:8000!
         <version>0.1.4</version>
     </dependency>
     ```
-   
-2. Execute [maestro.sql](./script/maestro.sql) against your Postgres database to create the necessary schema. If you instead want to start off with a ready-to-go local Dockerized Postgres instance, just execute: 
+
+[//]: # TODO (add more details on how to actually run this in your own app   )
+2. If you instead want to start off with a ready-to-go local Dockerized Postgres instance, just execute: 
    ```bash 
    docker compose -f script/docker-compose.yml up --build --force-recreate postgres
    ```

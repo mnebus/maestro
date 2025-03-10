@@ -6,14 +6,22 @@ import lucidity.maestro.engine.api.Maestro;
 import lucidity.maestro.engine.api.workflow.WorkflowOptions;
 import lucidity.maestro.engine.internal.MaestroImpl;
 import lucidity.maestro.engine.internal.config.Initializer;
+import lucidity.maestro.engine.internal.entity.EventModel;
+import lucidity.maestro.engine.internal.handler.Await;
 import lucidity.maestro.engine.internal.repo.EventRepo;
+import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.output.MigrateResult;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.time.Duration;
+import java.util.List;
 import java.util.function.Supplier;
 
 public class MaestroService {
 
+    private static final Logger logger = LoggerFactory.getLogger(MaestroService.class);
     private static MaestroImpl serviceInstance;
 
     public static void await(Supplier<Boolean> condition) {
@@ -30,6 +38,10 @@ public class MaestroService {
 
     public static <T> T newWorkflow(Class<T> clazz, WorkflowOptions options) {
         return serviceInstance.newWorkflow(clazz, options);
+    }
+
+    public static List<EventModel> getWorkflowEvents(String workflowId) {
+        return serviceInstance.getWorkflowEvents(workflowId);
     }
 
     public static MaestroServiceBuilder builder() {
@@ -51,11 +63,22 @@ public class MaestroService {
         }
 
         public Maestro build() {
+            runDatabaseMigration(this.dataSource);
+
             EventRepo eventRepo = new EventRepo(this.dataSource);
             MaestroImpl m = new MaestroImpl(eventRepo, this.dataSource);
             Initializer.initialize(m, eventRepo);
             serviceInstance = m;
             return m;
+        }
+
+        private static void runDatabaseMigration(DataSource dataSource) {
+            MigrateResult migrate = Flyway.configure()
+                    .baselineVersion("0")
+                    .baselineOnMigrate(true)
+                    .dataSource(dataSource)
+                    .load()
+                    .migrate();
         }
 
         private static HikariDataSource initializeDataSource(String username, String password, String url) {

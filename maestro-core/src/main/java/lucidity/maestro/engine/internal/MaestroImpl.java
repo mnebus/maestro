@@ -4,10 +4,11 @@ import lucidity.maestro.engine.api.Maestro;
 import lucidity.maestro.engine.api.activity.Activity;
 import lucidity.maestro.engine.api.activity.ActivityOptions;
 import lucidity.maestro.engine.api.throwable.UnregisteredWorkflowException;
-import lucidity.maestro.engine.api.workflow.Workflow;
+import lucidity.maestro.engine.api.workflow.WorkflowActions;
 import lucidity.maestro.engine.api.workflow.WorkflowOptions;
 import lucidity.maestro.engine.internal.dto.WorkflowContext;
 import lucidity.maestro.engine.internal.entity.EventEntity;
+import lucidity.maestro.engine.internal.entity.EventModel;
 import lucidity.maestro.engine.internal.handler.ActivityInvocationHandler;
 import lucidity.maestro.engine.internal.handler.WorkflowInvocationHandler;
 import lucidity.maestro.engine.internal.repo.EventRepo;
@@ -33,17 +34,21 @@ public class MaestroImpl implements Maestro {
     private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final EventRepo eventRepo;
 
-    private final Workflow workflowActions;
+    private final WorkflowActions workflowActions;
 
     public MaestroImpl(EventRepo eventRepo, DataSource dataSource) {
-        this.workflowActions = new Workflow.WorkflowImpl(this, eventRepo, dataSource);
+        this.workflowActions = new WorkflowActions.WorkflowActionsImpl(this, eventRepo, dataSource);
         this.eventRepo = eventRepo;
     }
 
-    public void registerWorkflowImplementationTypes(Class<?>... workflows) {
+    public List<EventModel> getWorkflowEvents(String workflowId) {
+        return eventRepo.get(workflowId);
+    }
 
-        Arrays.stream(workflows)
-                .forEach(workflow -> simpleNameToWorkflowImplType.put(workflow.getSimpleName(), workflow));
+    public void registerWorkflowImplementationTypes(Class<?>... workflowImplementationClasses) {
+
+        Arrays.stream(workflowImplementationClasses)
+                .forEach(workflowImplementationClass -> simpleNameToWorkflowImplType.put(workflowImplementationClass.getSimpleName(), workflowImplementationClass));
     }
 
     @Override
@@ -56,7 +61,7 @@ public class MaestroImpl implements Maestro {
     }
 
     @Override
-    public Workflow workflowActions() {
+    public WorkflowActions workflowActions() {
         return this.workflowActions;
     }
 
