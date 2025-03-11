@@ -1,12 +1,30 @@
 package lucidity.maestro.engine.util;
 
+import lucidity.maestro.engine.api.activity.Activity;
+import lucidity.maestro.engine.api.async.Async;
 import lucidity.maestro.engine.api.workflow.RunnableWorkflow;
-import lucidity.maestro.engine.api.workflow.WorkflowFunction;
-import lucidity.maestro.engine.api.workflow.WorkflowInterface;
 
-@WorkflowInterface
-public interface ExampleWorkflowWithAsync extends RunnableWorkflow<String, Integer> {
+import java.util.concurrent.CompletableFuture;
 
-    @WorkflowFunction
-    String execute(Integer param);
+public class ExampleWorkflowWithAsync implements RunnableWorkflow<String, Integer> {
+
+    @Activity
+    ExampleAsyncActivity asyncActivity;
+
+    @Override
+    public String execute(Integer param) {
+        System.out.println("Running ExampleWorkflowWithAsyncImpl with param [%s]".formatted(param));
+        CompletableFuture<String> twoSecondFuture = Async.function(() -> asyncActivity.workFor2SecondsAndEcho("2-second-echo"));
+        CompletableFuture<String> oneSecondFuture = Async.function(() -> asyncActivity.workFor1SecondAndEcho("1-second-echo"));
+
+        try {
+            String oneSecondEcho = oneSecondFuture.get();
+            String twoSecondEcho = twoSecondFuture.get();
+
+            return "param: [%s] oneSecondEcho: [%s] twoSecondEcho: [%s]".formatted(param, oneSecondEcho, twoSecondEcho);
+        } catch (Exception e) {
+            throw new RuntimeException(e.toString(), e);
+        }
+
+    }
 }

@@ -36,7 +36,7 @@ public class MaestroService {
         return serviceInstance;
     }
 
-    public static <T extends RunnableWorkflow> T newWorkflow2(Class<T> clazz, WorkflowOptions options) {
+    public static <T extends RunnableWorkflow> T newWorkflow(Class<T> clazz, WorkflowOptions options) {
         return serviceInstance.newWorkflow(clazz, options);
     }
 

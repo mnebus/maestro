@@ -47,14 +47,10 @@ public class Util {
     }
 
     public static Method findWorkflowMethod(Class<?> clazz) {
-        for (Class<?> iface : clazz.getInterfaces()) {
-            for (Method method : iface.getMethods()) {
-                if (method.isAnnotationPresent(WorkflowFunction.class)) {
-                    return method;
-                }
-            }
-        }
-        return null;
+        return Arrays.stream(clazz.getMethods())
+                .filter(method -> "execute".equals(method.getName()))
+                .findFirst()
+                .orElseThrow();
     }
 
     public static Object[] getDefaultArgs(Integer numberOfParameters) {

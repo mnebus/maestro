@@ -51,7 +51,7 @@ class ExampleApplicationTests {
 
         // when we create a workflow
         String workflowId = "example-workflow-id";
-        OrderWorkflow workflow = MaestroService.newWorkflow2(OrderWorkflowImpl.class, new WorkflowOptions(workflowId));
+        OrderWorkflow workflow = MaestroService.newWorkflow(OrderWorkflowImpl.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         OrderFinalized orderFinalized = workflow.execute(new Order(new BigDecimal(10.00), Arrays.asList(new OrderedProduct("something", 1))));
 

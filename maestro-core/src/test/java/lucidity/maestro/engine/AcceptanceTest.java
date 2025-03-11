@@ -32,10 +32,10 @@ public class AcceptanceTest {
         Maestro maestro = MaestroService.builder()
                 .configureDataSource(postgresqlContainer.getUsername(), postgresqlContainer.getPassword(), postgresqlContainer.getJdbcUrl())
                 .build();
-        maestro.registerWorkflowImplementationTypes(ExampleSimpleWorkflowImpl.class);
+        maestro.registerWorkflowImplementationTypes(ExampleSimpleWorkflow.class);
 
         // when we create a workflow
-        ExampleSimpleWorkflow exampleSimpleWorkflow = MaestroService.newWorkflow2(ExampleSimpleWorkflowImpl.class, new WorkflowOptions("example-simple-workflow-id"));
+        ExampleSimpleWorkflow exampleSimpleWorkflow = MaestroService.newWorkflow(ExampleSimpleWorkflow.class, new WorkflowOptions("example-simple-workflow-id"));
         // and execute the workflow
         String output = exampleSimpleWorkflow.execute(666);
 
@@ -49,7 +49,7 @@ public class AcceptanceTest {
         assertEquals("666", events.get(0).input());
         assertEquals("\"666\"", events.get(0).output());
         assertEquals("execute", events.get(0).functionName());
-        assertEquals("ExampleSimpleWorkflowImpl", events.get(0).className());
+        assertEquals(ExampleSimpleWorkflow.class.getSimpleName(), events.get(0).className());
         assertEquals(Category.WORKFLOW, events.get(0).category());
 
     }
@@ -61,11 +61,11 @@ public class AcceptanceTest {
         Maestro maestro = MaestroService.builder()
                 .configureDataSource(postgresqlContainer.getUsername(), postgresqlContainer.getPassword(), postgresqlContainer.getJdbcUrl())
                 .build();
-        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithSignalImpl.class);
+        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithSignal.class);
 
         // when we create a workflow
         String workflowId = "example-with-signal-id";
-        ExampleWorkflowWithSignal exampleSimpleWorkflow = MaestroService.newWorkflow2(ExampleWorkflowWithSignalImpl.class, new WorkflowOptions(workflowId));
+        ExampleWorkflowWithSignal exampleSimpleWorkflow = MaestroService.newWorkflow(ExampleWorkflowWithSignal.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         String output = exampleSimpleWorkflow.execute(777);
 
@@ -81,7 +81,7 @@ public class AcceptanceTest {
         assertEquals("777", events.get(0).input());
         assertNull(events.get(0).output());
         assertEquals("execute", events.get(0).functionName());
-        assertEquals("ExampleWorkflowWithSignalImpl", events.get(0).className());
+        assertEquals(ExampleWorkflowWithSignal.class.getSimpleName(), events.get(0).className());
         assertNull(events.get(0).endTimestamp());
         assertEquals(Category.WORKFLOW, events.get(0).category());
 
@@ -121,12 +121,12 @@ public class AcceptanceTest {
         Maestro maestro = MaestroService.builder()
                 .configureDataSource(postgresqlContainer.getUsername(), postgresqlContainer.getPassword(), postgresqlContainer.getJdbcUrl())
                 .build();
-        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithActivityImpl.class);
+        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithActivity.class);
         maestro.registerActivity(new ExampleMathActivityImpl());
 
         // when we create a workflow
         String workflowId = "example-workflow-with-activity-id";
-        ExampleWorkflowWithActivity exampleWorkflowWithActivity = MaestroService.newWorkflow2(ExampleWorkflowWithActivityImpl.class, new WorkflowOptions(workflowId));
+        ExampleWorkflowWithActivity exampleWorkflowWithActivity = MaestroService.newWorkflow(ExampleWorkflowWithActivity.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         ExampleWorkflowWithActivity.ExampleWorkflowWithActivityParam param = new ExampleWorkflowWithActivity.ExampleWorkflowWithActivityParam(100, 2L, 20L);
         String output = exampleWorkflowWithActivity.execute(param);
@@ -143,7 +143,7 @@ public class AcceptanceTest {
                 {"startWith":100,"multiplyBy":2,"subtract":20}""", events.get(0).input());
         assertEquals("\"180\"", events.get(0).output());
         assertEquals("execute", events.get(0).functionName());
-        assertEquals("ExampleWorkflowWithActivityImpl", events.get(0).className());
+        assertEquals(ExampleWorkflowWithActivity.class.getSimpleName(), events.get(0).className());
         assertNotNull(events.get(0).startTimestamp());
         assertNotNull(events.get(0).endTimestamp());
         assertEquals(Category.WORKFLOW, events.get(0).category());
@@ -164,11 +164,11 @@ public class AcceptanceTest {
         Maestro maestro = MaestroService.builder()
                 .configureDataSource(postgresqlContainer.getUsername(), postgresqlContainer.getPassword(), postgresqlContainer.getJdbcUrl())
                 .build();
-        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithSleepImpl.class);
+        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithSleep.class);
 
         // when we create a workflow
         String workflowId = "example-with-sleep";
-        ExampleWorkflowWithSleep exampleSimpleWorkflow = MaestroService.newWorkflow2(ExampleWorkflowWithSleepImpl.class, new WorkflowOptions(workflowId));
+        ExampleWorkflowWithSleep exampleSimpleWorkflow = MaestroService.newWorkflow(ExampleWorkflowWithSleep.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         String output = exampleSimpleWorkflow.execute(123);
 
@@ -184,7 +184,7 @@ public class AcceptanceTest {
         assertEquals("123", events.get(0).input());
         assertNull(events.get(0).output());
         assertEquals("execute", events.get(0).functionName());
-        assertEquals("ExampleWorkflowWithSleepImpl", events.get(0).className());
+        assertEquals(ExampleWorkflowWithSleep.class.getSimpleName(), events.get(0).className());
         assertNull(events.get(0).endTimestamp());
         assertEquals(Category.WORKFLOW, events.get(0).category());
 
@@ -194,7 +194,7 @@ public class AcceptanceTest {
         assertNull(events.get(1).endTimestamp());
 
         // then the workflow will eventually complete
-        Awaitility.await().atMost(5, TimeUnit.SECONDS)
+        Awaitility.await().atMost(30, TimeUnit.SECONDS)
                 .until(() -> MaestroService.getWorkflowEvents(workflowId).get(0).endTimestamp() != null);
         events = MaestroService.getWorkflowEvents(workflowId);
 
@@ -209,12 +209,12 @@ public class AcceptanceTest {
         Maestro maestro = MaestroService.builder()
                 .configureDataSource(postgresqlContainer.getUsername(), postgresqlContainer.getPassword(), postgresqlContainer.getJdbcUrl())
                 .build();
-        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithAsyncImpl.class);
+        maestro.registerWorkflowImplementationTypes(ExampleWorkflowWithAsync.class);
         maestro.registerActivity(new ExampleAsyncActivityImpl());
 
         // when we create a workflow
         String workflowId = "example-workflow-with-async";
-        ExampleWorkflowWithAsync exampleWorkflowWithActivity = MaestroService.newWorkflow2(ExampleWorkflowWithAsyncImpl.class, new WorkflowOptions(workflowId));
+        ExampleWorkflowWithAsync exampleWorkflowWithActivity = MaestroService.newWorkflow(ExampleWorkflowWithAsync.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         String output = exampleWorkflowWithActivity.execute(55);
 

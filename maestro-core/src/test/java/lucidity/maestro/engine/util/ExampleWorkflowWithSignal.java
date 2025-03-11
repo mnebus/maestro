@@ -1,17 +1,21 @@
 package lucidity.maestro.engine.util;
 
+import lucidity.maestro.engine.MaestroService;
 import lucidity.maestro.engine.api.signal.SignalFunction;
 import lucidity.maestro.engine.api.workflow.RunnableWorkflow;
-import lucidity.maestro.engine.api.workflow.WorkflowFunction;
-import lucidity.maestro.engine.api.workflow.WorkflowInterface;
 
-@WorkflowInterface
-public interface ExampleWorkflowWithSignal extends RunnableWorkflow<String, Integer> {
+public class ExampleWorkflowWithSignal implements RunnableWorkflow<String, Integer> {
 
-    @WorkflowFunction
-    public String execute(Integer input);
+    private boolean doContinue = false;
+
+    @Override
+    public String execute(Integer input) {
+        MaestroService.await(() -> this.doContinue);
+        return input.toString();
+    }
 
     @SignalFunction
-    void doContinue(boolean doContinue);
-
+    public void doContinue(boolean doContinue) {
+        this.doContinue = doContinue;
+    }
 }
