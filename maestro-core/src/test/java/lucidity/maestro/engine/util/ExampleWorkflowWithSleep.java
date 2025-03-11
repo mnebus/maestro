@@ -1,10 +1,11 @@
 package lucidity.maestro.engine.util;
 
+import lucidity.maestro.engine.api.workflow.RunnableWorkflow;
 import lucidity.maestro.engine.api.workflow.WorkflowFunction;
 import lucidity.maestro.engine.api.workflow.WorkflowInterface;
 
 @WorkflowInterface
-public interface ExampleWorkflowWithSleep {
+public interface ExampleWorkflowWithSleep extends RunnableWorkflow<String, Integer> {
 
     @WorkflowFunction
     String execute(Integer param);

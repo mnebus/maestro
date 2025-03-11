@@ -3,6 +3,8 @@ package org.example.workflow;
 import lucidity.maestro.engine.MaestroService;
 import lucidity.maestro.engine.api.activity.Activity;
 import lucidity.maestro.engine.api.async.Async;
+import lucidity.maestro.engine.api.signal.SignalFunction;
+import lucidity.maestro.engine.api.workflow.RunnableWorkflow;
 import org.example.activity.interfaces.InventoryActivity;
 import org.example.activity.interfaces.NotificationActivity;
 import org.example.activity.interfaces.PaymentActivity;
@@ -15,7 +17,6 @@ import org.example.workflow.model.ShippingConfirmation;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 
 public class OrderWorkflowImpl implements OrderWorkflow {
 
@@ -31,7 +32,7 @@ public class OrderWorkflowImpl implements OrderWorkflow {
     private String trackingNumber;
 
     @Override
-    public OrderFinalized submitOrder(Order order) throws ExecutionException, InterruptedException {
+    public OrderFinalized execute(Order order) {
 
         List<OrderedProduct> reservedProducts = inventoryActivity.reserveInventory(order.orderedProducts());
 
@@ -45,18 +46,24 @@ public class OrderWorkflowImpl implements OrderWorkflow {
         CompletableFuture<String> emailResultFuture = Async.function(() -> notificationActivity.sendOrderShippedEmail(trackingNumber));
         CompletableFuture<List<ProductInventory>> newInventoryFuture = Async.function(() -> inventoryActivity.decreaseInventory(reservedProducts));
 
-        // waiting for both to complete
-        emailResultFuture.get();
-        List<ProductInventory> newInventoryLevel = newInventoryFuture.get();
+        try {
+            // waiting for both to complete
+            emailResultFuture.get();
+            List<ProductInventory> newInventoryLevel = newInventoryFuture.get();
+            MaestroService.sleep(Duration.ofSeconds(10)); // this can be as long as you like
 
-        MaestroService.sleep(Duration.ofSeconds(10)); // this can be as long as you like
+            notificationActivity.sendSpecialOfferPushNotification();
 
-        notificationActivity.sendSpecialOfferPushNotification();
+            return new OrderFinalized(trackingNumber, newInventoryLevel);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
 
-        return new OrderFinalized(trackingNumber, newInventoryLevel);
+
     }
 
     @Override
+    @SignalFunction
     public void confirmShipped(ShippingConfirmation confirmation) {
         trackingNumber = confirmation.trackingNumber();
     }

@@ -1,6 +1,7 @@
 package lucidity.maestro.engine.util;
 
 import lucidity.maestro.engine.MaestroService;
+import lucidity.maestro.engine.api.signal.SignalFunction;
 
 public class ExampleWorkflowWithSignalImpl implements ExampleWorkflowWithSignal {
 
@@ -13,6 +14,7 @@ public class ExampleWorkflowWithSignalImpl implements ExampleWorkflowWithSignal 
     }
 
     @Override
+    @SignalFunction
     public void doContinue(boolean doContinue) {
         this.doContinue = doContinue;
     }

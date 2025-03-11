@@ -35,7 +35,7 @@ public class AcceptanceTest {
         maestro.registerWorkflowImplementationTypes(ExampleSimpleWorkflowImpl.class);
 
         // when we create a workflow
-        ExampleSimpleWorkflow exampleSimpleWorkflow = MaestroService.newWorkflow(ExampleSimpleWorkflowImpl.class, new WorkflowOptions("example-simple-workflow-id"));
+        ExampleSimpleWorkflow exampleSimpleWorkflow = MaestroService.newWorkflow2(ExampleSimpleWorkflowImpl.class, new WorkflowOptions("example-simple-workflow-id"));
         // and execute the workflow
         String output = exampleSimpleWorkflow.execute(666);
 
@@ -65,7 +65,7 @@ public class AcceptanceTest {
 
         // when we create a workflow
         String workflowId = "example-with-signal-id";
-        ExampleWorkflowWithSignal exampleSimpleWorkflow = MaestroService.newWorkflow(ExampleWorkflowWithSignalImpl.class, new WorkflowOptions(workflowId));
+        ExampleWorkflowWithSignal exampleSimpleWorkflow = MaestroService.newWorkflow2(ExampleWorkflowWithSignalImpl.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         String output = exampleSimpleWorkflow.execute(777);
 
@@ -126,7 +126,7 @@ public class AcceptanceTest {
 
         // when we create a workflow
         String workflowId = "example-workflow-with-activity-id";
-        ExampleWorkflowWithActivity exampleWorkflowWithActivity = MaestroService.newWorkflow(ExampleWorkflowWithActivityImpl.class, new WorkflowOptions(workflowId));
+        ExampleWorkflowWithActivity exampleWorkflowWithActivity = MaestroService.newWorkflow2(ExampleWorkflowWithActivityImpl.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         ExampleWorkflowWithActivity.ExampleWorkflowWithActivityParam param = new ExampleWorkflowWithActivity.ExampleWorkflowWithActivityParam(100, 2L, 20L);
         String output = exampleWorkflowWithActivity.execute(param);
@@ -168,7 +168,7 @@ public class AcceptanceTest {
 
         // when we create a workflow
         String workflowId = "example-with-sleep";
-        ExampleWorkflowWithSleep exampleSimpleWorkflow = MaestroService.newWorkflow(ExampleWorkflowWithSleepImpl.class, new WorkflowOptions(workflowId));
+        ExampleWorkflowWithSleep exampleSimpleWorkflow = MaestroService.newWorkflow2(ExampleWorkflowWithSleepImpl.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         String output = exampleSimpleWorkflow.execute(123);
 
@@ -214,7 +214,7 @@ public class AcceptanceTest {
 
         // when we create a workflow
         String workflowId = "example-workflow-with-async";
-        ExampleWorkflowWithAsync exampleWorkflowWithActivity = MaestroService.newWorkflow(ExampleWorkflowWithAsyncImpl.class, new WorkflowOptions(workflowId));
+        ExampleWorkflowWithAsync exampleWorkflowWithActivity = MaestroService.newWorkflow2(ExampleWorkflowWithAsyncImpl.class, new WorkflowOptions(workflowId));
         // and execute the workflow
         String output = exampleWorkflowWithActivity.execute(55);
 

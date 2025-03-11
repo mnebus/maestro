@@ -19,6 +19,7 @@ dependencies {
     implementation("io.github.resilience4j:resilience4j-retry:2.2.0")
     implementation("com.github.kagkarlsson:db-scheduler:14.0.1")
     implementation("ch.qos.logback:logback-classic:1.5.6")
+    implementation("net.bytebuddy:byte-buddy:1.17.2")
 
     // https://mvnrepository.com/artifact/org.flywaydb/flyway-core
     implementation("org.flywaydb:flyway-core:$flywayVersion")

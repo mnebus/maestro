@@ -3,11 +3,11 @@ package lucidity.maestro.engine;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import lucidity.maestro.engine.api.Maestro;
+import lucidity.maestro.engine.api.workflow.RunnableWorkflow;
 import lucidity.maestro.engine.api.workflow.WorkflowOptions;
 import lucidity.maestro.engine.internal.MaestroImpl;
 import lucidity.maestro.engine.internal.config.Initializer;
 import lucidity.maestro.engine.internal.entity.EventModel;
-import lucidity.maestro.engine.internal.handler.Await;
 import lucidity.maestro.engine.internal.repo.EventRepo;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
@@ -36,7 +36,7 @@ public class MaestroService {
         return serviceInstance;
     }
 
-    public static <T> T newWorkflow(Class<T> clazz, WorkflowOptions options) {
+    public static <T extends RunnableWorkflow> T newWorkflow2(Class<T> clazz, WorkflowOptions options) {
         return serviceInstance.newWorkflow(clazz, options);
     }
 

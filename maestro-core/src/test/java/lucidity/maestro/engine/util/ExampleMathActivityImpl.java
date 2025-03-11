@@ -1,4 +1,4 @@
-package lucidity.maestro.engine;
+package lucidity.maestro.engine.util;
 
 import lucidity.maestro.engine.util.ExampleMathActivity;
 
