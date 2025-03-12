@@ -9,6 +9,7 @@ java {
 
 val jacksonVersion = "2.17.2"
 val flywayVersion = "11.3.4"
+val jdbiVersion = "3.48.0"
 val testcontainersVersion = "1.20.6"
 
 dependencies {
@@ -25,6 +26,13 @@ dependencies {
     implementation("org.flywaydb:flyway-core:$flywayVersion")
     // https://mvnrepository.com/artifact/org.flywaydb/flyway-database-postgresql
     runtimeOnly("org.flywaydb:flyway-database-postgresql:$flywayVersion")
+    implementation("org.awaitility:awaitility:4.3.0")
+    // https://mvnrepository.com/artifact/org.jdbi/jdbi3-core
+    implementation("org.jdbi:jdbi3-core:$jdbiVersion")
+    // https://mvnrepository.com/artifact/org.jdbi/jdbi3-postgres
+    testImplementation("org.jdbi:jdbi3-postgres:$jdbiVersion")
+
+
 
 
 
@@ -34,7 +42,6 @@ dependencies {
     // https://mvnrepository.com/artifact/org.testcontainers/postgresql
     testImplementation("org.testcontainers:postgresql:$testcontainersVersion")
     // https://mvnrepository.com/artifact/org.awaitility/awaitility
-    testImplementation("org.awaitility:awaitility:4.3.0")
 
 
 }

@@ -1,3 +1,57 @@
+
+-- tables for nimble workflow
+CREATE TABLE workflow
+(
+    id                  VARCHAR PRIMARY KEY,
+    scheduled_event_id  VARCHAR,
+    started_event_id    VARCHAR,
+    completed_event_id  VARCHAR,
+    class_name          VARCHAR,
+    input               bytea,
+    output              bytea,
+    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE workflow_activity
+(
+    workflow_id          VARCHAR,
+    name                VARCHAR,
+    started_event_id    VARCHAR,
+    completed_event_id  VARCHAR,
+    output              bytea,
+    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE workflow_signal
+(
+    workflow_id         VARCHAR,
+    name                VARCHAR,
+    waiting_event_id    VARCHAR,
+    received_event_id   VARCHAR,
+    value               bytea,
+    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE workflow_sleep
+(
+    workflow_id         VARCHAR,
+    identifier          VARCHAR,
+    started_event_id    VARCHAR,
+    completed_event_id  VARCHAR,
+    duration_in_millis  bigint,
+    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE workflow_event
+(
+    id              VARCHAR PRIMARY KEY,
+    workflow_id     VARCHAR,
+    category        VARCHAR,
+    status          VARCHAR,
+    timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+
 DROP TABLE IF EXISTS event;
 
 CREATE TYPE status AS ENUM ('STARTED', 'COMPLETED', 'FAILED', 'RECEIVED', 'UNSATISFIED');
