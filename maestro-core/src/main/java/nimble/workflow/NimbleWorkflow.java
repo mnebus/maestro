@@ -20,29 +20,51 @@ import java.util.Set;
 
 public class NimbleWorkflow {
 
+    public static WorkflowRepository repository;
     private final WorkflowExecutor workflowExecutor;
 
     private NimbleWorkflow(WorkflowExecutor workflowExecutor, DataSource dataSource) {
         this.workflowExecutor = workflowExecutor;
     }
 
-    public WorkflowExecutor executor() {
-        return this.workflowExecutor;
-    }
-
     public static NimbusServiceBuilder builder() {
         return new NimbusServiceBuilder();
     }
 
-    public static WorkflowRepository repository;
+    public WorkflowExecutor executor() {
+        return this.workflowExecutor;
+    }
 
     public static class NimbusServiceBuilder {
 
         private DataSource dataSource;
 
-        private Set<Object> workflowDependencies = new HashSet<>();
+        private final Set<Object> workflowDependencies = new HashSet<>();
 
         private NimbusServiceBuilder() {
+        }
+
+        private static void runDatabaseMigration(DataSource dataSource) {
+            MigrateResult migrate = Flyway.configure()
+                    .baselineVersion("0")
+                    .baselineOnMigrate(true)
+                    .dataSource(dataSource)
+                    .load()
+                    .migrate();
+        }
+
+        private static HikariDataSource initializeDataSource(String username, String password, String url) {
+            HikariConfig config = new HikariConfig();
+            config.setJdbcUrl(url);
+            config.setUsername(username);
+            config.setPassword(password);
+            config.setDriverClassName("org.postgresql.Driver");
+            config.setMaximumPoolSize(10);
+
+            // setting min idle prevents the datasource from eagerly creating max pool size
+            config.setMinimumIdle(2);
+            config.setTransactionIsolation("TRANSACTION_READ_COMMITTED");
+            return new HikariDataSource(config);
         }
 
         public NimbusServiceBuilder dataSource(String username, String password, String url) {
@@ -82,30 +104,6 @@ public class NimbleWorkflow {
             scheduler.start();
 
             return scheduler;
-        }
-
-
-        private static void runDatabaseMigration(DataSource dataSource) {
-            MigrateResult migrate = Flyway.configure()
-                    .baselineVersion("0")
-                    .baselineOnMigrate(true)
-                    .dataSource(dataSource)
-                    .load()
-                    .migrate();
-        }
-
-        private static HikariDataSource initializeDataSource(String username, String password, String url) {
-            HikariConfig config = new HikariConfig();
-            config.setJdbcUrl(url);
-            config.setUsername(username);
-            config.setPassword(password);
-            config.setDriverClassName("org.postgresql.Driver");
-            config.setMaximumPoolSize(10);
-
-            // setting min idle prevents the datasource from eagerly creating max pool size
-            config.setMinimumIdle(2);
-            config.setTransactionIsolation("TRANSACTION_READ_COMMITTED");
-            return new HikariDataSource(config);
         }
     }
 }

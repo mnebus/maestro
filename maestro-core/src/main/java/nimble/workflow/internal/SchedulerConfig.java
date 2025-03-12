@@ -20,6 +20,29 @@ public class SchedulerConfig {
     //TODO -- move all of scheduling activities into this class
 
     private static Set<Object> workflowDependencies;
+    public static final OneTimeTask<CompleteSleepTaskInput> COMPLETE_SLEEP_TASK = Tasks.oneTime("CompleteSleepTask", CompleteSleepTaskInput.class)
+            .execute((inst, ctx) -> {
+                CompleteSleepTaskInput data = inst.getData();
+                NimbleWorkflow.repository.sleepCompleted(data.workflowId(), data.sleepIdentifier());
+                try {
+                    resumeExecution(data.workflowId(), Class.forName(data.workflowClassName()));
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+    public static final OneTimeTask<SignalWorkflowTaskInput> SIGNAL_WORKFLOW_TASK = Tasks.oneTime("SignalWorkflowTask", SignalWorkflowTaskInput.class)
+            .execute((inst, ctx) -> {
+                SignalWorkflowTaskInput data = inst.getData();
+                NimbleWorkflow.repository.signalReceived(data.workflowId(), data.signalName(), data.signalValue());
+                resumeExecution(data.workflowId(), data.workflowClass());
+
+            });
+    public static final OneTimeTask<StartWorkflowTaskInput> START_WORKFLOW_TASK = Tasks.oneTime("StartWorkflowTask", StartWorkflowTaskInput.class)
+            .execute((inst, ctx) -> {
+                StartWorkflowTaskInput data = inst.getData();
+                NimbleWorkflow.repository.workflowStarted(data.workflowId());
+                resumeExecution(data.workflowId(), data.workflowClass());
+            });
 
     public static void initialize(Set<Object> workflowDependencies) {
         SchedulerConfig.workflowDependencies = workflowDependencies;
@@ -34,38 +57,13 @@ public class SchedulerConfig {
             WorkflowExecutor.workflowId.remove();
             NimbleWorkflow.repository.workflowCompleted(workflowId, output);
         } catch (AwaitingSignalException awaitingSignalException) {
-            System.out.println("Pausing execution of workflow [%s] to wait for signal [%s]".formatted(workflowId, awaitingSignalException.getSignal()));
-        } catch(WorkflowSleepingException e) {
+            System.out.printf("Pausing execution of workflow [%s] to wait for signal [%s]%n", workflowId, awaitingSignalException.getSignal());
+        } catch (WorkflowSleepingException e) {
             System.out.println(e.getMessage());
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
-
-    public static final OneTimeTask<CompleteSleepTaskInput> COMPLETE_SLEEP_TASK = Tasks.oneTime("CompleteSleepTask", CompleteSleepTaskInput.class)
-            .execute((inst, ctx) -> {
-                CompleteSleepTaskInput data = inst.getData();
-                NimbleWorkflow.repository.sleepCompleted(data.workflowId(), data.sleepIdentifier());
-                try {
-                    resumeExecution(data.workflowId(), Class.forName(data.workflowClassName()));
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-
-    public static final OneTimeTask<SignalWorkflowTaskInput> SIGNAL_WORKFLOW_TASK = Tasks.oneTime("SignalWorkflowTask", SignalWorkflowTaskInput.class)
-            .execute((inst, ctx) -> {
-                SignalWorkflowTaskInput data = inst.getData();
-                NimbleWorkflow.repository.signalReceived(data.workflowId(), data.signalName(), data.signalValue());
-                resumeExecution(data.workflowId(), data.workflowClass());
-
-            });
-    public static final OneTimeTask<StartWorkflowTaskInput> START_WORKFLOW_TASK = Tasks.oneTime("StartWorkflowTask", StartWorkflowTaskInput.class)
-            .execute((inst, ctx) -> {
-                StartWorkflowTaskInput data = inst.getData();
-                NimbleWorkflow.repository.workflowStarted(data.workflowId());
-                resumeExecution(data.workflowId(), data.workflowClass());
-            });
 
     private static RunnableWorkflow instantiate(Class workflowClass) {
         try {

@@ -21,16 +21,36 @@ public class WorkflowFunctions {
     private static WorkflowFunctions SINGLETON = null;
     private final Scheduler scheduler;
 
-    public static void initialize(Scheduler scheduler) {
-        SINGLETON = new WorkflowFunctions(scheduler);
-    }
-
     public WorkflowFunctions(Scheduler scheduler) {
         this.scheduler = scheduler;
     }
 
+    public static void initialize(Scheduler scheduler) {
+        SINGLETON = new WorkflowFunctions(scheduler);
+    }
+
     public static void sleep(String identifier, Duration duration) {
         SINGLETON._sleep(identifier, duration);
+    }
+
+    public static <R extends Serializable> CompletableFuture<R> async(Supplier<R> supplier) {
+        return SINGLETON._async(supplier);
+    }
+
+    public static CompletableFuture<Void> async(Runnable runnable) {
+        return SINGLETON._async(runnable);
+    }
+
+    public static <R extends Serializable> R activity(String activityName, Supplier<R> supplier) {
+        return SINGLETON._activity(activityName, supplier);
+    }
+
+    public static void activity(String activityName, Runnable runnable) {
+        SINGLETON._activity(activityName, runnable);
+    }
+
+    public static <T> T awaitSignal(String signalName, Class<T> returnType) {
+        return SINGLETON._awaitSignal(signalName, returnType);
     }
 
     private void _sleep(String identifier, Duration duration) {
@@ -59,10 +79,6 @@ public class WorkflowFunctions {
         ));
     }
 
-    public static <R extends Serializable> CompletableFuture<R> async(Supplier<R> supplier) {
-        return SINGLETON._async(supplier);
-    }
-
     private <R extends Serializable> CompletableFuture<R> _async(Supplier<R> supplier) {
         String workflowId = WorkflowExecutor.workflowId.get();
         return CompletableFuture.supplyAsync(() -> {
@@ -73,10 +89,6 @@ public class WorkflowFunctions {
         });
     }
 
-    public static CompletableFuture<Void> async(Runnable runnable) {
-        return SINGLETON._async(runnable);
-    }
-
     private CompletableFuture<Void> _async(Runnable runnable) {
         String workflowId = WorkflowExecutor.workflowId.get();
         return CompletableFuture.runAsync(() -> {
@@ -84,18 +96,6 @@ public class WorkflowFunctions {
             runnable.run();
             WorkflowExecutor.workflowId.remove();
         });
-    }
-
-    public static <R extends Serializable> R activity(String activityName, Supplier<R> supplier) {
-        return SINGLETON._activity(activityName, supplier);
-    }
-
-    public static void activity(String activityName, Runnable runnable) {
-        SINGLETON._activity(activityName, runnable);
-    }
-
-    public static <T> T awaitSignal(String signalName, Class<T> returnType) {
-        return SINGLETON._awaitSignal(signalName, returnType);
     }
 
     private <T> T _awaitSignal(String signalName, Class<T> returnType) {
@@ -114,6 +114,10 @@ public class WorkflowFunctions {
     }
 
     <R extends Serializable> R _activity(String activityName, Supplier<R> supplier) {
+        //TODO -- encapsulate this call everywhere in the app and throw an absolute fit
+        // if we are running in a thread context that doesn't have this. It would be like
+        // crossing the streams bad if we don't have this.  Should also guard against it with
+        // a not null constraint in the db, but it would be good to have a graceful/informative failure
         String workflowId = WorkflowExecutor.workflowId.get();
 
         if (NimbleWorkflow.repository.isActivityComplete(workflowId, activityName)) {

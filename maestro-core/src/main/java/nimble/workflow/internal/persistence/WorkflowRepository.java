@@ -13,18 +13,32 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 public class WorkflowRepository {
 
     private final Jdbi jdbi;
 
-    private SerializableColumnMapper serializableColumnMapper = new SerializableColumnMapper();
-    private InstantColumnMapper instantColumnMapper = new InstantColumnMapper();
+    private final SerializableColumnMapper serializableColumnMapper = new SerializableColumnMapper();
+    private final InstantColumnMapper instantColumnMapper = new InstantColumnMapper();
 
     public WorkflowRepository(Jdbi jdbi) {
         this.jdbi = jdbi;
+    }
+
+    private static String newEvent(Handle handle, String workflowId, EventCategory category, EventStatus status) {
+        String eventId = UUID.randomUUID().toString();
+        handle.createUpdate("""
+                        INSERT INTO workflow_event (id, workflow_id, category, status, timestamp)
+                        VALUES (:id, :workflow_id, :category, :status, :timestamp)
+                        """)
+                .bind("id", eventId)
+                .bind("workflow_id", workflowId)
+                .bind("category", category)
+                .bind("status", status)
+                .bind("timestamp", Instant.now())
+                .execute();
+        return eventId;
     }
 
     public void newActivityStarted(String workflowId, String name) {
@@ -401,21 +415,6 @@ public class WorkflowRepository {
                                 ))
                         .findOne()
                         .orElse(null));
-    }
-
-    private static String newEvent(Handle handle, String workflowId, EventCategory category, EventStatus status) {
-        String eventId = UUID.randomUUID().toString();
-        handle.createUpdate("""
-                        INSERT INTO workflow_event (id, workflow_id, category, status, timestamp)
-                        VALUES (:id, :workflow_id, :category, :status, :timestamp)
-                        """)
-                .bind("id", eventId)
-                .bind("workflow_id", workflowId)
-                .bind("category", category)
-                .bind("status", status)
-                .bind("timestamp", Instant.now())
-                .execute();
-        return eventId;
     }
 
     static class SerializableColumnMapper implements ColumnMapper<Serializable> {

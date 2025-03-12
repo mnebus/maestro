@@ -29,10 +29,10 @@ public class WorkflowExecutor {
 
     public <P, T extends Serializable> void signalWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, String workflowId, String signalName, T signalValue) {
         TaskInstance<SignalWorkflowTaskInput> instance = SchedulerConfig.SIGNAL_WORKFLOW_TASK.instance(
-                "signal::%s::%s".formatted(workflowId,signalName),
+                "signal::%s::%s".formatted(workflowId, signalName),
                 new SignalWorkflowTaskInput(workflowClass, workflowId, signalName, signalValue));
         scheduler.schedule(instance, Instant.now());
-        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> NimbleWorkflow.repository.isSignalReceived(workflowId,signalName));
+        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> NimbleWorkflow.repository.isSignalReceived(workflowId, signalName));
 
     }
 
