@@ -57,6 +57,7 @@ public class SchedulerConfig {
                 } else {
                     //TODO -- mark workflow and condition failed
                     executionOperations.remove();
+
                 }
 
             })
@@ -87,7 +88,6 @@ public class SchedulerConfig {
             System.out.println(e.getMessage());
         } catch (ConditionNotSatisfiedException e) {
             System.out.println(e.getMessage());
-            throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

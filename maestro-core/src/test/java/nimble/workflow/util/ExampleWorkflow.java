@@ -47,6 +47,7 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
             }
             return false;
         });
+
         try {
             sleepFor10.get();
             sleepFor1.get();

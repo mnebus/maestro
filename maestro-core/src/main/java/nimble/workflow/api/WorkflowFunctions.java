@@ -11,6 +11,7 @@ import nimble.workflow.model.Workflow;
 import java.io.Serializable;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
@@ -58,17 +59,13 @@ public class WorkflowFunctions {
     private void _awaitCondition(String conditionIdentifier, Supplier<Boolean> conditionSupplier) {
         String workflowId = WorkflowExecutor.workflowId.get();
         Condition condition = NimbleWorkflow.repository.getCondition(workflowId, conditionIdentifier);
-        String conditionKey = "condition::%s::%s".formatted(workflowId, conditionIdentifier);
+        String conditionKey = "condition::%s::%s::%s".formatted(workflowId, conditionIdentifier, UUID.randomUUID().toString());
         if (condition == null) {
             NimbleWorkflow.repository.newConditionWaiting(workflowId, conditionIdentifier);
-            Workflow workflow = NimbleWorkflow.repository.getWorkflow(workflowId);
-            WaitForConditionTaskInput input = new WaitForConditionTaskInput(
-                    workflow.className(), workflowId, Duration.ofSeconds(3));
-            scheduler.schedule(SchedulerConfig.WAIT_FOR_CONDITION_TASK.instance(
-                    conditionKey, input), Instant.now());
-            return;
+            condition = NimbleWorkflow.repository.getCondition(workflowId, conditionIdentifier);
         }
         if (condition.isSatisfied()) {
+            System.out.println("condition has been previously satisfied");
             return;
         }
 
@@ -76,6 +73,11 @@ public class WorkflowFunctions {
             NimbleWorkflow.repository.conditionSatisfied(workflowId, conditionIdentifier);
             return;
         }
+        Workflow workflow = NimbleWorkflow.repository.getWorkflow(workflowId);
+            WaitForConditionTaskInput input = new WaitForConditionTaskInput(
+                    workflow.className(), workflowId, Duration.ofSeconds(3));
+            scheduler.schedule(SchedulerConfig.WAIT_FOR_CONDITION_TASK.instance(
+                    conditionKey, input), Instant.now().plus(Duration.ofSeconds(3)));
         throw new ConditionNotSatisfiedException("workflow condition [%s] was not satisfied".formatted(conditionKey));
 
     }
