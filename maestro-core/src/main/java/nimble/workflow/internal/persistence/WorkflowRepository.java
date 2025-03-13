@@ -123,7 +123,9 @@ public class WorkflowRepository {
                                                 rs.getString("completed_status"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
-                                )).one());
+                                ))
+                        .findOne()
+                        .orElse(null));
     }
 
     public void newSignalWaiting(String workflowId, String name) {

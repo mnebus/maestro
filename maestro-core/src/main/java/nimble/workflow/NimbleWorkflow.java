@@ -1,7 +1,6 @@
 package nimble.workflow;
 
 import com.github.kagkarlsson.scheduler.Scheduler;
-import com.github.kagkarlsson.scheduler.logging.LogLevel;
 import com.github.kagkarlsson.scheduler.task.Task;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -23,9 +22,11 @@ public class NimbleWorkflow {
 
     public static WorkflowRepository repository;
     private final WorkflowExecutor workflowExecutor;
+    private final NimbusServiceBuilder builder;
 
-    private NimbleWorkflow(WorkflowExecutor workflowExecutor) {
+    private NimbleWorkflow(WorkflowExecutor workflowExecutor, NimbusServiceBuilder builder) {
         this.workflowExecutor = workflowExecutor;
+        this.builder = builder;
     }
 
     public static NimbusServiceBuilder builder() {
@@ -36,10 +37,17 @@ public class NimbleWorkflow {
         return this.workflowExecutor;
     }
 
+    public void stop() {
+        builder.stop();
+    }
+
     public static class NimbusServiceBuilder {
 
         private final Set<Object> workflowDependencies = new HashSet<>();
         private DataSource dataSource;
+
+        private boolean managedDataSource = false;
+        private Scheduler scheduler;
 
         private NimbusServiceBuilder() {
         }
@@ -69,6 +77,12 @@ public class NimbleWorkflow {
 
         public NimbusServiceBuilder dataSource(String username, String password, String url) {
             this.dataSource = initializeDataSource(username, password, url);
+            this.managedDataSource = true;
+            return this;
+        }
+
+        public NimbusServiceBuilder dataSource(DataSource dataSource) {
+            this.dataSource = dataSource;
             return this;
         }
 
@@ -82,7 +96,7 @@ public class NimbleWorkflow {
 
             SchedulerConfig.initialize(this.workflowDependencies);
 
-            Scheduler scheduler = initializeScheduler(this.dataSource,
+            this.scheduler = initializeScheduler(this.dataSource,
                     SchedulerConfig.START_WORKFLOW_TASK,
                     SchedulerConfig.SIGNAL_WORKFLOW_TASK,
                     SchedulerConfig.COMPLETE_SLEEP_TASK,
@@ -92,7 +106,7 @@ public class NimbleWorkflow {
             NimbleWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
             WorkflowFunctions.initialize(scheduler);
             //TODO -- null check this.dataSource
-            return new NimbleWorkflow(executor);
+            return new NimbleWorkflow(executor, this);
         }
 
         private Scheduler initializeScheduler(DataSource dataSource, Task... tasks) {
@@ -100,12 +114,18 @@ public class NimbleWorkflow {
                     .create(dataSource, tasks)
                     .pollingInterval(Duration.ofSeconds(1))
                     .registerShutdownHook()
-                    .failureLogging(LogLevel.INFO, false)
                     .build();
 
             scheduler.start();
 
             return scheduler;
+        }
+
+        public void stop() {
+            this.scheduler.stop();
+            if (managedDataSource) {
+                ((HikariDataSource) this.dataSource).close();
+            }
         }
     }
 }

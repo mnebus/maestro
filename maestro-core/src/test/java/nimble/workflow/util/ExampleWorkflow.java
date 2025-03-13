@@ -1,12 +1,13 @@
 package nimble.workflow.util;
 
 import lucidity.maestro.engine.api.workflow.RunnableWorkflow;
-import nimble.workflow.api.WorkflowFunctions;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static nimble.workflow.api.WorkflowFunctions.*;
 
 public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
 
@@ -22,31 +23,25 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
     @Override
     public String execute(Integer param) {
 
-        String convertedToString = WorkflowFunctions.activity("Convert to String",
-                () -> param.toString());
+        String convertedToString = activity("Convert to String", () -> param.toString());
 
-        boolean okToResume = WorkflowFunctions.awaitSignal("OkToResume", Boolean.class);
+        boolean okToResume = awaitSignal("OkToResume", Boolean.class);
+
         System.out.println("received signal to resume [%s]".formatted(okToResume));
 
-        WorkflowFunctions.activity("Work for between 1 and 5 seconds", service::doSomeWork);
+        activity("Work for between 1 and 5 seconds", service::doSomeWork);
 
-        String concatenated = WorkflowFunctions.activity("Concatenate",
-                () -> convertedToString + "asdf");
+        String concatenated = activity("Concatenate", () -> convertedToString + "asdf");
 
-        WorkflowFunctions.sleep("take a nap", Duration.ofSeconds(1));
+        sleep("take a nap", Duration.ofSeconds(1));
 
-        CompletableFuture<Void> sleepFor10 = WorkflowFunctions.async(()
-                -> WorkflowFunctions.activity("Work for 10 seconds", () -> sleepForMillis(10_000)));
+        CompletableFuture<Void> sleepFor10 = async(()
+                -> activity("Work for 10 seconds", () -> sleepForMillis(10_000)));
 
-        CompletableFuture<Void> sleepFor1 = WorkflowFunctions.async(()
-                -> WorkflowFunctions.activity("Work for 1 second", () -> sleepForMillis(1_000)));
+        CompletableFuture<Void> sleepFor1 = async(()
+                -> activity("Work for 1 second", () -> sleepForMillis(1_000)));
 
-        WorkflowFunctions.awaitCondition("run a few times", () -> {
-            if (conditionCheckCount.getAndIncrement() > 2) {
-                return true;
-            }
-            return false;
-        });
+        awaitCondition("run a few times", () -> conditionCheckCount.getAndIncrement() > 2);
 
         try {
             sleepFor10.get();

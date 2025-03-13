@@ -11,6 +11,7 @@ val jacksonVersion = "2.17.2"
 val flywayVersion = "11.3.4"
 val jdbiVersion = "3.48.0"
 val testcontainersVersion = "1.20.6"
+val floggerVersion = "0.8"
 
 dependencies {
     implementation("org.postgresql:postgresql:42.7.3")
@@ -21,6 +22,11 @@ dependencies {
     implementation("com.github.kagkarlsson:db-scheduler:14.0.1")
     implementation("ch.qos.logback:logback-classic:1.5.6")
     implementation("net.bytebuddy:byte-buddy:1.17.2")
+    // https://mvnrepository.com/artifact/com.google.flogger/flogger
+    implementation("com.google.flogger:flogger:${floggerVersion}")
+    // https://mvnrepository.com/artifact/com.google.flogger/flogger-slf4j-backend
+    runtimeOnly("com.google.flogger:flogger-slf4j-backend:${floggerVersion}")
+
 
     // https://mvnrepository.com/artifact/org.flywaydb/flyway-core
     implementation("org.flywaydb:flyway-core:$flywayVersion")
@@ -31,10 +37,6 @@ dependencies {
     implementation("org.jdbi:jdbi3-core:$jdbiVersion")
     // https://mvnrepository.com/artifact/org.jdbi/jdbi3-postgres
     testImplementation("org.jdbi:jdbi3-postgres:$jdbiVersion")
-
-
-
-
 
     testImplementation(platform("org.junit:junit-bom:5.10.0"))
     testImplementation("org.junit.jupiter:junit-jupiter")
@@ -47,5 +49,6 @@ dependencies {
 }
 
 tasks.withType<Test> {
+    testLogging.showStandardStreams = project.hasProperty("stdout")
     useJUnitPlatform()
 }

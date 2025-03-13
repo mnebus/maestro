@@ -1,3 +1,23 @@
+-- table required by db-scheduler
+create table scheduled_tasks
+(
+    task_name            TEXT                     NOT NULL,
+    task_instance        TEXT                     NOT NULL,
+    task_data            bytea,
+    execution_time       TIMESTAMP WITH TIME ZONE NOT NULL,
+    picked               BOOLEAN                  NOT NULL,
+    picked_by            TEXT,
+    last_success         TIMESTAMP WITH TIME ZONE,
+    last_failure         TIMESTAMP WITH TIME ZONE,
+    consecutive_failures INT,
+    last_heartbeat       TIMESTAMP WITH TIME ZONE,
+    version              BIGINT                   NOT NULL,
+    PRIMARY KEY (task_name, task_instance)
+);
+
+CREATE INDEX execution_time_idx ON scheduled_tasks (execution_time);
+CREATE INDEX last_heartbeat_idx ON scheduled_tasks (last_heartbeat);
+
 
 -- tables for nimble workflow
 CREATE TABLE workflow
@@ -60,6 +80,42 @@ CREATE TABLE workflow_event
     timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE OR REPLACE VIEW v_event_function_identifier AS
+(
+SELECT name AS identifier, started_event_id AS event_id
+FROM workflow_activity
+UNION
+SELECT name AS identifier, completed_event_id AS event_id
+FROM workflow_activity
+UNION
+SELECT identifier, waiting_event_id AS event_id
+FROM workflow_condition
+UNION
+SELECT identifier, satisfied_event_id AS event_id
+FROM workflow_condition
+UNION
+SELECT name, waiting_event_id AS event_id
+FROM workflow_signal
+UNION
+SELECT name, received_event_id AS event_id
+FROM workflow_signal
+UNION
+SELECT identifier, started_event_id AS event_id
+FROM workflow_sleep
+UNION
+SELECT identifier, completed_event_id AS event_id
+FROM workflow_sleep
+    );
+
+CREATE OR REPLACE VIEW v_workflow_event as
+SELECT workflow_event.*,
+       vfi.identifier as function_name
+FROM workflow_event
+         INNER JOIN v_event_function_identifier vfi
+                    ON workflow_event.id = vfi.event_id;
+
+-- end tables required for nimble
+
 
 DROP TABLE IF EXISTS event;
 
@@ -90,22 +146,3 @@ CREATE INDEX idx_workflow_category_sequence ON event (workflow_id, category, seq
 CREATE INDEX idx_workflow_category_status_timestamp ON event (workflow_id, category, status, timestamp);
 
 
--- table required by db-scheduler
-create table scheduled_tasks
-(
-    task_name            TEXT                     NOT NULL,
-    task_instance        TEXT                     NOT NULL,
-    task_data            bytea,
-    execution_time       TIMESTAMP WITH TIME ZONE NOT NULL,
-    picked               BOOLEAN                  NOT NULL,
-    picked_by            TEXT,
-    last_success         TIMESTAMP WITH TIME ZONE,
-    last_failure         TIMESTAMP WITH TIME ZONE,
-    consecutive_failures INT,
-    last_heartbeat       TIMESTAMP WITH TIME ZONE,
-    version              BIGINT                   NOT NULL,
-    PRIMARY KEY (task_name, task_instance)
-);
-
-CREATE INDEX execution_time_idx ON scheduled_tasks (execution_time);
-CREATE INDEX last_heartbeat_idx ON scheduled_tasks (last_heartbeat);

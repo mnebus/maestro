@@ -1,12 +1,10 @@
 package nimble.workflow.api;
 
 import com.github.kagkarlsson.scheduler.Scheduler;
+import com.google.common.flogger.FluentLogger;
 import nimble.workflow.NimbleWorkflow;
 import nimble.workflow.internal.*;
-import nimble.workflow.model.Condition;
-import nimble.workflow.model.Signal;
-import nimble.workflow.model.Sleep;
-import nimble.workflow.model.Workflow;
+import nimble.workflow.model.*;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -16,6 +14,8 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
 
 public class WorkflowFunctions {
+
+    private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
     private static WorkflowFunctions SINGLETON = null;
     private final Scheduler scheduler;
@@ -48,6 +48,7 @@ public class WorkflowFunctions {
         SINGLETON._activity(activityName, runnable);
     }
 
+    // TODO -- add an optional polling interval for condition reevaluation
     public static void awaitCondition(String conditionIdentifier, Supplier<Boolean> condition) {
         SINGLETON._awaitCondition(conditionIdentifier, condition);
     }
@@ -74,10 +75,10 @@ public class WorkflowFunctions {
             return;
         }
         Workflow workflow = NimbleWorkflow.repository.getWorkflow(workflowId);
-            WaitForConditionTaskInput input = new WaitForConditionTaskInput(
-                    workflow.className(), workflowId, Duration.ofSeconds(3));
-            scheduler.schedule(SchedulerConfig.WAIT_FOR_CONDITION_TASK.instance(
-                    conditionKey, input), Instant.now().plus(Duration.ofSeconds(3)));
+        WaitForConditionTaskInput input = new WaitForConditionTaskInput(
+                workflow.className(), workflowId, Duration.ofSeconds(3));
+        scheduler.schedule(SchedulerConfig.WAIT_FOR_CONDITION_TASK.instance(
+                conditionKey, input), Instant.now().plus(Duration.ofSeconds(3)));
         throw new ConditionNotSatisfiedException("workflow condition [%s] was not satisfied".formatted(conditionKey));
 
     }
@@ -148,30 +149,53 @@ public class WorkflowFunctions {
         // crossing the streams bad if we don't have this.  Should also guard against it with
         // a not null constraint in the db, but it would be good to have a graceful/informative failure
         String workflowId = WorkflowExecutor.workflowId.get();
+        Activity activity = initActivity(workflowId, activityName);
 
-        if (NimbleWorkflow.repository.isActivityComplete(workflowId, activityName)) {
-            System.out.println("this already ran, so skipping execution");
-            return (R) NimbleWorkflow.repository.getActivity(workflowId, activityName).output();
+        if (activityHasAlreadyExecuted(activity)) {
+            return activityOutput(activity);
         }
-        NimbleWorkflow.repository.newActivityStarted(workflowId, activityName);
-        System.out.println("before");
+
         R output = supplier.get();
-        System.out.println("after");
-        NimbleWorkflow.repository.completeActivity(workflowId, activityName, output);
+        completeActivity(activity, output);
         return output;
     }
 
     void _activity(String activityName, Runnable runnable) {
         String workflowId = WorkflowExecutor.workflowId.get();
-        if (NimbleWorkflow.repository.isActivityComplete(workflowId, activityName)) {
-            System.out.println("this already ran, so skipping execution");
+        Activity activity = initActivity(workflowId, activityName);
+        if (activityHasAlreadyExecuted(activity)) {
             return;
         }
-        NimbleWorkflow.repository.newActivityStarted(workflowId, activityName);
-        System.out.println("before");
         runnable.run();
-        System.out.println("after");
-        NimbleWorkflow.repository.completeActivity(workflowId, activityName, null);
+        completeActivity(activity, null);
+    }
+
+    private <R extends Serializable> R activityOutput(Activity activity) {
+        return (R) NimbleWorkflow.repository.getActivity(activity.workflowId(), activity.name()).output();
+    }
+
+    private Activity initActivity(String workflowId, String activityName) {
+        Activity activity = NimbleWorkflow.repository.getActivity(workflowId, activityName);
+        logger.atInfo().log("starting workflow activity [%s::%s]", workflowId, activityName);
+        if (activity == null) {
+            logger.atInfo().log("registering new activity [%s::%s] for initial execution", workflowId, activityName);
+            NimbleWorkflow.repository.newActivityStarted(workflowId, activityName);
+            activity = NimbleWorkflow.repository.getActivity(workflowId, activityName);
+        }
+        return activity;
+    }
+
+    private boolean activityHasAlreadyExecuted(Activity activity) {
+        if (activity.isCompleted()) {
+            logger.atInfo().log("activity [%s] completed with result from prior execution", activity.key());
+            return true;
+        }
+        return false;
+    }
+
+    private <R extends Serializable> void completeActivity(Activity activity, R output) {
+        NimbleWorkflow.repository.completeActivity(activity.workflowId(), activity.name(), output);
+        logger.atInfo().log("activity [%s] completed for the first time", activity.key());
     }
 
 }
