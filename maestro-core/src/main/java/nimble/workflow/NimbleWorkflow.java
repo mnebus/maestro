@@ -92,7 +92,7 @@ public class NimbleWorkflow {
             NimbleWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
             WorkflowFunctions.initialize(scheduler);
             //TODO -- null check this.dataSource
-            return new NimbleWorkflow(executor, this.dataSource);
+            return new NimbleWorkflow(executor);
         }
 
         private Scheduler initializeScheduler(DataSource dataSource, Task... tasks) {
