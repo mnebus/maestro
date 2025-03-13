@@ -10,6 +10,7 @@ import nimble.workflow.model.Workflow;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -44,6 +45,30 @@ public class SchedulerConfig {
                 resumeExecution(data.workflowId(), data.workflowClass());
             });
 
+    public static final OneTimeTask<WaitForConditionTaskInput> WAIT_FOR_CONDITION_TASK = Tasks.oneTime("WaitForConditionTask", WaitForConditionTaskInput.class)
+            .onFailure((executionComplete, executionOperations) -> {
+                WaitForConditionTaskInput data = (WaitForConditionTaskInput) executionComplete.getExecution().taskInstance.getData();
+                Throwable cause = executionComplete.getCause().orElse(null);
+                System.out.println("Failed to satisfy condition: " + cause);
+                if (cause instanceof ConditionNotSatisfiedException) {
+                    Instant rescheduleTime = Instant.now().plus(data.pollRate());
+                    System.out.printf("rescheduling condition reevaluation at [%s]%n", rescheduleTime);
+                    executionOperations.reschedule(executionComplete, rescheduleTime);
+                } else {
+                    //TODO -- mark workflow and condition failed
+                    executionOperations.remove();
+                }
+
+            })
+            .execute((inst, ctx) -> {
+                WaitForConditionTaskInput data = inst.getData();
+                try {
+                    resumeExecution(data.workflowId(), Class.forName(data.workflowClassName()));
+                } catch (ClassNotFoundException e) {
+                    throw new RuntimeException(e);
+                }
+            });
+
     public static void initialize(Set<Object> workflowDependencies) {
         SchedulerConfig.workflowDependencies = workflowDependencies;
     }
@@ -60,6 +85,9 @@ public class SchedulerConfig {
             System.out.printf("Pausing execution of workflow [%s] to wait for signal [%s]%n", workflowId, awaitingSignalException.getSignal());
         } catch (WorkflowSleepingException e) {
             System.out.println(e.getMessage());
+        } catch (ConditionNotSatisfiedException e) {
+            System.out.println(e.getMessage());
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

@@ -2,10 +2,8 @@ package nimble.workflow.api;
 
 import com.github.kagkarlsson.scheduler.Scheduler;
 import nimble.workflow.NimbleWorkflow;
-import nimble.workflow.internal.AwaitingSignalException;
-import nimble.workflow.internal.CompleteSleepTaskInput;
-import nimble.workflow.internal.SchedulerConfig;
-import nimble.workflow.internal.WorkflowSleepingException;
+import nimble.workflow.internal.*;
+import nimble.workflow.model.Condition;
 import nimble.workflow.model.Signal;
 import nimble.workflow.model.Sleep;
 import nimble.workflow.model.Workflow;
@@ -49,8 +47,37 @@ public class WorkflowFunctions {
         SINGLETON._activity(activityName, runnable);
     }
 
+    public static void awaitCondition(String conditionIdentifier, Supplier<Boolean> condition) {
+        SINGLETON._awaitCondition(conditionIdentifier, condition);
+    }
+
     public static <T> T awaitSignal(String signalName, Class<T> returnType) {
         return SINGLETON._awaitSignal(signalName, returnType);
+    }
+
+    private void _awaitCondition(String conditionIdentifier, Supplier<Boolean> conditionSupplier) {
+        String workflowId = WorkflowExecutor.workflowId.get();
+        Condition condition = NimbleWorkflow.repository.getCondition(workflowId, conditionIdentifier);
+        String conditionKey = "condition::%s::%s".formatted(workflowId, conditionIdentifier);
+        if (condition == null) {
+            NimbleWorkflow.repository.newConditionWaiting(workflowId, conditionIdentifier);
+            Workflow workflow = NimbleWorkflow.repository.getWorkflow(workflowId);
+            WaitForConditionTaskInput input = new WaitForConditionTaskInput(
+                    workflow.className(), workflowId, Duration.ofSeconds(3));
+            scheduler.schedule(SchedulerConfig.WAIT_FOR_CONDITION_TASK.instance(
+                    conditionKey, input), Instant.now());
+            return;
+        }
+        if (condition.isSatisfied()) {
+            return;
+        }
+
+        if (conditionSupplier.get()) {
+            NimbleWorkflow.repository.conditionSatisfied(workflowId, conditionIdentifier);
+            return;
+        }
+        throw new ConditionNotSatisfiedException("workflow condition [%s] was not satisfied".formatted(conditionKey));
+
     }
 
     private void _sleep(String identifier, Duration duration) {

@@ -342,6 +342,78 @@ public class WorkflowRepository {
         });
     }
 
+    public void newConditionWaiting(String workflowId, String identifier) {
+        jdbi.useTransaction(handle -> {
+            String eventId = newEvent(handle, workflowId, EventCategory.CONDITION, EventStatus.WAITING);
+            handle.createUpdate("""
+                            INSERT INTO workflow_condition(workflow_id, identifier, waiting_event_id)
+                            VALUES (:workflowId, :identifier, :eventId)
+                            """)
+                    .bind("workflowId", workflowId)
+                    .bind("identifier", identifier)
+                    .bind("eventId", eventId)
+                    .execute();
+        });
+    }
+
+    public void conditionSatisfied(String workflowId, String identifier) {
+        jdbi.useTransaction(handle -> {
+            String eventId = newEvent(handle, workflowId, EventCategory.CONDITION, EventStatus.SATISFIED);
+
+            handle.createUpdate("""
+                            UPDATE workflow_condition
+                            SET satisfied_event_id = :eventId
+                            WHERE workflow_id = :workflowId
+                                AND identifier = :identifier""")
+                    .bind("eventId", eventId)
+                    .bind("identifier", identifier)
+                    .bind("workflowId", workflowId)
+                    .execute();
+
+        });
+    }
+
+    public Condition getCondition(String workflowId, String identifier) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT 
+                                    c.workflow_id AS c_workflow_id,
+                                    c.identifier AS c_identifier,                                                                 
+                                    waiting.timestamp AS waiting_timestamp,
+                                    waiting.category AS waiting_category,
+                                    waiting.status AS waiting_status,
+                                    satisfied.timestamp AS satisfied_timestamp,
+                                    satisfied.category AS satisfied_category,
+                                    satisfied.status AS satisfied_status
+                                FROM workflow_condition c
+                                  LEFT JOIN workflow_event waiting
+                                    ON c.waiting_event_id = waiting.id
+                                  LEFT JOIN workflow_event satisfied
+                                    ON c.satisfied_event_id = satisfied.id
+                                WHERE c.workflow_id = :workflowId 
+                                    AND c.identifier = :identifier
+                                """)
+                        .bind("workflowId", workflowId)
+                        .bind("identifier", identifier)
+                        .map((rs, ctx) ->
+                                new Condition(
+                                        rs.getString("c_workflow_id"),
+                                        rs.getString("c_identifier"),
+                                        new WorkflowEvent(
+                                                rs.getString("waiting_category"),
+                                                rs.getString("waiting_status"),
+                                                instantColumnMapper.map(rs, "waiting_timestamp", ctx)
+                                        ),
+                                        new WorkflowEvent(
+                                                rs.getString("satisfied_category"),
+                                                rs.getString("satisfied_status"),
+                                                instantColumnMapper.map(rs, "satisfied_timestamp", ctx)
+                                        )
+                                ))
+                        .findOne()
+                        .orElse(null));
+    }
+
     public void newSleepStarted(String workflowId, String identifier, Duration duration) {
         jdbi.useTransaction(handle -> {
             String eventId = newEvent(handle, workflowId, EventCategory.SLEEP, EventStatus.STARTED);
@@ -378,15 +450,15 @@ public class WorkflowRepository {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT 
-                                    s.workflow_id as s_workflow_id,
-                                    s.identifier as s_identifier,
-                                    s.duration_in_millis as s_duration_in_millis,                                    
-                                    started.timestamp as started_timestamp,
-                                    started.category as started_category,
-                                    started.status as started_status,
-                                    completed.timestamp as completed_timestamp,
-                                    completed.category as completed_category,
-                                    completed.status as completed_status
+                                    s.workflow_id AS s_workflow_id,
+                                    s.identifier AS s_identifier,
+                                    s.duration_in_millis AS s_duration_in_millis,                                    
+                                    started.timestamp AS started_timestamp,
+                                    started.category AS started_category,
+                                    started.status AS started_status,
+                                    completed.timestamp AS completed_timestamp,
+                                    completed.category AS completed_category,
+                                    completed.status AS completed_status
                                 FROM workflow_sleep s
                                   LEFT JOIN workflow_event started
                                     ON s.started_event_id = started.id

@@ -1,5 +1,5 @@
 package nimble.workflow.model;
 
 public enum EventCategory {
-    WORKFLOW, ACTIVITY, SIGNAL, AWAIT, SLEEP
+    WORKFLOW, ACTIVITY, SIGNAL, CONDITION, SLEEP
 }

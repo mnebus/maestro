@@ -14,8 +14,8 @@ CREATE TABLE workflow
 
 CREATE TABLE workflow_activity
 (
-    workflow_id          VARCHAR,
-    name                VARCHAR,
+    workflow_id         VARCHAR NOT NULL,
+    name                VARCHAR NOT NULL,
     started_event_id    VARCHAR,
     completed_event_id  VARCHAR,
     output              bytea,
@@ -24,18 +24,27 @@ CREATE TABLE workflow_activity
 
 CREATE TABLE workflow_signal
 (
-    workflow_id         VARCHAR,
-    name                VARCHAR,
+    workflow_id         VARCHAR NOT NULL,
+    name                VARCHAR NOT NULL,
     waiting_event_id    VARCHAR,
     received_event_id   VARCHAR,
     value               bytea,
     created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE workflow_condition
+(
+    workflow_id         VARCHAR NOT NULL,
+    identifier          VARCHAR NOT NULL,
+    waiting_event_id    VARCHAR,
+    satisfied_event_id  VARCHAR,
+    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE workflow_sleep
 (
-    workflow_id         VARCHAR,
-    identifier          VARCHAR,
+    workflow_id         VARCHAR NOT NULL,
+    identifier          VARCHAR NOT NULL,
     started_event_id    VARCHAR,
     completed_event_id  VARCHAR,
     duration_in_millis  bigint,
@@ -45,7 +54,7 @@ CREATE TABLE workflow_sleep
 CREATE TABLE workflow_event
 (
     id              VARCHAR PRIMARY KEY,
-    workflow_id     VARCHAR,
+    workflow_id     VARCHAR NOT NULL,
     category        VARCHAR,
     status          VARCHAR,
     timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP

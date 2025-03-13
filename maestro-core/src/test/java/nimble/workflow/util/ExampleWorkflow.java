@@ -6,10 +6,13 @@ import nimble.workflow.api.WorkflowFunctions;
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
 
     private final ExampleService service;
+
+    private static AtomicInteger conditionCheckCount = new AtomicInteger(0);
 
     public ExampleWorkflow(ExampleService service) {
 
@@ -22,8 +25,8 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
         String convertedToString = WorkflowFunctions.activity("Convert to String",
                 () -> param.toString());
 
-        boolean okToRusume = WorkflowFunctions.awaitSignal("OkToResume", Boolean.class);
-        System.out.println("received signal to resume [%s]".formatted(okToRusume));
+        boolean okToResume = WorkflowFunctions.awaitSignal("OkToResume", Boolean.class);
+        System.out.println("received signal to resume [%s]".formatted(okToResume));
 
         WorkflowFunctions.activity("Work for between 1 and 5 seconds", service::doSomeWork);
 
@@ -38,6 +41,12 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
         CompletableFuture<Void> sleepFor1 = WorkflowFunctions.async(()
                 -> WorkflowFunctions.activity("Work for 1 second", () -> sleepForMillis(1_000)));
 
+        WorkflowFunctions.awaitCondition("run a few times", () -> {
+            if (conditionCheckCount.getAndIncrement() > 2) {
+                return true;
+            }
+            return false;
+        });
         try {
             sleepFor10.get();
             sleepFor1.get();

@@ -1,6 +1,7 @@
 package nimble.workflow;
 
 import com.github.kagkarlsson.scheduler.Scheduler;
+import com.github.kagkarlsson.scheduler.logging.LogLevel;
 import com.github.kagkarlsson.scheduler.task.Task;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -23,7 +24,7 @@ public class NimbleWorkflow {
     public static WorkflowRepository repository;
     private final WorkflowExecutor workflowExecutor;
 
-    private NimbleWorkflow(WorkflowExecutor workflowExecutor, DataSource dataSource) {
+    private NimbleWorkflow(WorkflowExecutor workflowExecutor) {
         this.workflowExecutor = workflowExecutor;
     }
 
@@ -37,9 +38,8 @@ public class NimbleWorkflow {
 
     public static class NimbusServiceBuilder {
 
-        private DataSource dataSource;
-
         private final Set<Object> workflowDependencies = new HashSet<>();
+        private DataSource dataSource;
 
         private NimbusServiceBuilder() {
         }
@@ -85,7 +85,8 @@ public class NimbleWorkflow {
             Scheduler scheduler = initializeScheduler(this.dataSource,
                     SchedulerConfig.START_WORKFLOW_TASK,
                     SchedulerConfig.SIGNAL_WORKFLOW_TASK,
-                    SchedulerConfig.COMPLETE_SLEEP_TASK);
+                    SchedulerConfig.COMPLETE_SLEEP_TASK,
+                    SchedulerConfig.WAIT_FOR_CONDITION_TASK);
 
             WorkflowExecutor executor = new WorkflowExecutor(scheduler);
             NimbleWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
@@ -99,6 +100,7 @@ public class NimbleWorkflow {
                     .create(dataSource, tasks)
                     .pollingInterval(Duration.ofSeconds(1))
                     .registerShutdownHook()
+                    .failureLogging(LogLevel.INFO, false)
                     .build();
 
             scheduler.start();
