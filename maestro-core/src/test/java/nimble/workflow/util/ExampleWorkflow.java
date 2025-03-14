@@ -41,7 +41,7 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
         CompletableFuture<Void> sleepFor1 = async(()
                 -> activity("Work for 1 second", () -> sleepForMillis(1_000)));
 
-        awaitCondition("run a few times", () -> conditionCheckCount.getAndIncrement() > 2);
+        awaitCondition("run a few times", () -> conditionCheckCount.getAndIncrement() > 2, Duration.ofSeconds(3));
 
         try {
             sleepFor10.get();

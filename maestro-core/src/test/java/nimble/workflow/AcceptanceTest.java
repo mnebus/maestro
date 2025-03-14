@@ -71,7 +71,7 @@ public class AcceptanceTest {
         String workflowId = "test-workflow";
         nimble.executor().runWorkflow(ExampleWorkflow.class, 666, workflowId);
 
-        nimble.executor().signalWorkflow(ExampleWorkflow.class, workflowId, "OkToResume", true);
+        nimble.executor().signalWorkflow(workflowId, "OkToResume", true);
 
         Awaitility.await().atMost(1, TimeUnit.MINUTES)
                 .until(() -> "666asdf".equals(nimble.executor().getWorkflowOutput(workflowId, String.class)));

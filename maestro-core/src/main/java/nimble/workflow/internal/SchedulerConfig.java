@@ -2,6 +2,7 @@ package nimble.workflow.internal;
 
 import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
 import com.github.kagkarlsson.scheduler.task.helper.Tasks;
+import com.google.common.flogger.FluentLogger;
 import lucidity.maestro.engine.api.workflow.RunnableWorkflow;
 import nimble.workflow.NimbleWorkflow;
 import nimble.workflow.api.WorkflowExecutor;
@@ -10,7 +11,6 @@ import nimble.workflow.model.Workflow;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
-import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -18,6 +18,7 @@ import java.util.Set;
 
 public class SchedulerConfig {
 
+    private static final FluentLogger logger = FluentLogger.forEnclosingClass();
     //TODO -- move all of scheduling activities into this class
 
     private static Set<Object> workflowDependencies;
@@ -25,76 +26,56 @@ public class SchedulerConfig {
             .execute((inst, ctx) -> {
                 CompleteSleepTaskInput data = inst.getData();
                 NimbleWorkflow.repository.sleepCompleted(data.workflowId(), data.sleepIdentifier());
-                try {
-                    resumeExecution(data.workflowId(), Class.forName(data.workflowClassName()));
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                }
+                resumeExecution(data.workflowId());
             });
     public static final OneTimeTask<SignalWorkflowTaskInput> SIGNAL_WORKFLOW_TASK = Tasks.oneTime("SignalWorkflowTask", SignalWorkflowTaskInput.class)
             .execute((inst, ctx) -> {
                 SignalWorkflowTaskInput data = inst.getData();
                 NimbleWorkflow.repository.signalReceived(data.workflowId(), data.signalName(), data.signalValue());
-                resumeExecution(data.workflowId(), data.workflowClass());
-
+                resumeExecution(data.workflowId());
             });
-    public static final OneTimeTask<StartWorkflowTaskInput> START_WORKFLOW_TASK = Tasks.oneTime("StartWorkflowTask", StartWorkflowTaskInput.class)
+    public static final OneTimeTask<StartWorkflowTaskInput> RUN_WORKFLOW_TASK = Tasks.oneTime("RunWorkflowTask", StartWorkflowTaskInput.class)
+            .onFailure((executionComplete, executionOperations) -> {
+                //TODO - this should truly be an edge case (eg, exception handling had an unhandled exception,
+                // but we still shouldn't die in silence
+                executionOperations.remove();
+            })
             .execute((inst, ctx) -> {
                 StartWorkflowTaskInput data = inst.getData();
                 NimbleWorkflow.repository.workflowStarted(data.workflowId());
-                resumeExecution(data.workflowId(), data.workflowClass());
-            });
-
-    public static final OneTimeTask<WaitForConditionTaskInput> WAIT_FOR_CONDITION_TASK = Tasks.oneTime("WaitForConditionTask", WaitForConditionTaskInput.class)
-            .onFailure((executionComplete, executionOperations) -> {
-                WaitForConditionTaskInput data = (WaitForConditionTaskInput) executionComplete.getExecution().taskInstance.getData();
-                Throwable cause = executionComplete.getCause().orElse(null);
-                System.out.println("Failed to satisfy condition: " + cause);
-                if (cause instanceof ConditionNotSatisfiedException) {
-                    Instant rescheduleTime = Instant.now().plus(data.pollRate());
-                    System.out.printf("rescheduling condition reevaluation at [%s]%n", rescheduleTime);
-                    executionOperations.reschedule(executionComplete, rescheduleTime);
-                } else {
-                    //TODO -- mark workflow and condition failed
-                    executionOperations.remove();
-
-                }
-
-            })
-            .execute((inst, ctx) -> {
-                WaitForConditionTaskInput data = inst.getData();
-                try {
-                    resumeExecution(data.workflowId(), Class.forName(data.workflowClassName()));
-                } catch (ClassNotFoundException e) {
-                    throw new RuntimeException(e);
-                }
+                resumeExecution(data.workflowId());
             });
 
     public static void initialize(Set<Object> workflowDependencies) {
         SchedulerConfig.workflowDependencies = workflowDependencies;
     }
 
-    private static void resumeExecution(String workflowId, Class workflowClass) {
+    private static void resumeExecution(String workflowId) {
         Workflow workflow = NimbleWorkflow.repository.getWorkflow(workflowId);
         try {
-            RunnableWorkflow instance = instantiate(workflowClass);
+            RunnableWorkflow instance = instantiate(workflow.className());
             WorkflowExecutor.workflowId.set(workflowId);
             Object output = instance.execute(workflow.input());
             WorkflowExecutor.workflowId.remove();
             NimbleWorkflow.repository.workflowCompleted(workflowId, output);
-        } catch (AwaitingSignalException awaitingSignalException) {
-            System.out.printf("Pausing execution of workflow [%s] to wait for signal [%s]%n", workflowId, awaitingSignalException.getSignal());
+        } catch (AwaitingSignalException e) {
+            logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowId, e.getSignal());
+        } catch (WorkflowStillSleepingException e) {
+            logger.atInfo().log("Workflow [%s] has been sleeping [%s] for [%s] out of [%s]", workflowId, e.getIdentifier(), e.getElapsedSleepTime(), e.getNapTime());
         } catch (WorkflowSleepingException e) {
-            System.out.println(e.getMessage());
+            logger.atInfo().log("Pausing execution of workflow [%s] to sleep [%s] for [%s]", workflowId, e.getIdentifier(), e.getNapTime());
         } catch (ConditionNotSatisfiedException e) {
-            System.out.println(e.getMessage());
+            logger.atInfo().log("Pausing execution of workflow [%s] because condition [%s] is not satisfied",workflowId, e.getIdentifier());
         } catch (Exception e) {
+            //TODO -- handle unexpected/unhandled failure encountered while evaluating workflow
+            // this should not re-throw an exception, it should handle them all
             throw new RuntimeException(e);
         }
     }
 
-    private static RunnableWorkflow instantiate(Class workflowClass) {
+    private static RunnableWorkflow instantiate(String className) {
         try {
+            Class workflowClass = Class.forName(className);
             Constructor constructor = findInjectableConstructor(workflowClass);
 
             Object[] args = Arrays.stream(constructor.getParameterTypes())
@@ -105,7 +86,8 @@ public class SchedulerConfig {
                     .toArray();
             return (RunnableWorkflow) constructor.newInstance(args);
 
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException e) {
+        } catch (InstantiationException | IllegalAccessException | InvocationTargetException |
+                 ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
     }

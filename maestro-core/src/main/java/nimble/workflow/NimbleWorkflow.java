@@ -97,10 +97,9 @@ public class NimbleWorkflow {
             SchedulerConfig.initialize(this.workflowDependencies);
 
             this.scheduler = initializeScheduler(this.dataSource,
-                    SchedulerConfig.START_WORKFLOW_TASK,
+                    SchedulerConfig.RUN_WORKFLOW_TASK,
                     SchedulerConfig.SIGNAL_WORKFLOW_TASK,
-                    SchedulerConfig.COMPLETE_SLEEP_TASK,
-                    SchedulerConfig.WAIT_FOR_CONDITION_TASK);
+                    SchedulerConfig.COMPLETE_SLEEP_TASK);
 
             WorkflowExecutor executor = new WorkflowExecutor(scheduler);
             NimbleWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
@@ -114,6 +113,7 @@ public class NimbleWorkflow {
                     .create(dataSource, tasks)
                     .pollingInterval(Duration.ofSeconds(1))
                     .registerShutdownHook()
+                    .enableImmediateExecution()
                     .build();
 
             scheduler.start();

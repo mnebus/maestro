@@ -4,7 +4,10 @@ import com.github.kagkarlsson.scheduler.Scheduler;
 import com.google.common.flogger.FluentLogger;
 import nimble.workflow.NimbleWorkflow;
 import nimble.workflow.internal.*;
-import nimble.workflow.model.*;
+import nimble.workflow.model.Activity;
+import nimble.workflow.model.Condition;
+import nimble.workflow.model.Signal;
+import nimble.workflow.model.Sleep;
 
 import java.io.Serializable;
 import java.time.Duration;
@@ -49,64 +52,67 @@ public class WorkflowFunctions {
     }
 
     // TODO -- add an optional polling interval for condition reevaluation
-    public static void awaitCondition(String conditionIdentifier, Supplier<Boolean> condition) {
-        SINGLETON._awaitCondition(conditionIdentifier, condition);
+    public static void awaitCondition(String conditionIdentifier, Supplier<Boolean> condition, Duration evaluationInternal) {
+        SINGLETON._awaitCondition(conditionIdentifier, condition, evaluationInternal);
     }
 
     public static <T> T awaitSignal(String signalName, Class<T> returnType) {
         return SINGLETON._awaitSignal(signalName, returnType);
     }
 
-    private void _awaitCondition(String conditionIdentifier, Supplier<Boolean> conditionSupplier) {
+    private void _awaitCondition(String conditionIdentifier, Supplier<Boolean> conditionSupplier, Duration evaluationInterval) {
         String workflowId = WorkflowExecutor.workflowId.get();
-        Condition condition = NimbleWorkflow.repository.getCondition(workflowId, conditionIdentifier);
         String conditionKey = "condition::%s::%s::%s".formatted(workflowId, conditionIdentifier, UUID.randomUUID().toString());
+        logger.atFine().log("processing condition [%s]", conditionKey);
+        Condition condition = initializeCondition(workflowId, conditionIdentifier);
+        if (condition.isSatisfied()) {
+            logger.atInfo().log("skipping previously satisfied condition [%s]", conditionKey);
+            return;
+        }
+        logger.atInfo().log("evaluating condition [%s]", conditionKey);
+        if (conditionSupplier.get()) {
+            logger.atInfo().log("satisfied condition [%s]", conditionKey);
+            NimbleWorkflow.repository.conditionSatisfied(workflowId, conditionIdentifier);
+            return;
+        }
+        logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", conditionIdentifier, workflowId, evaluationInterval);
+        StartWorkflowTaskInput input = new StartWorkflowTaskInput(workflowId);
+        scheduler.schedule(SchedulerConfig.RUN_WORKFLOW_TASK.instance(
+                conditionKey, input), Instant.now().plus(evaluationInterval));
+        throw new ConditionNotSatisfiedException(conditionIdentifier);
+
+    }
+
+    private Condition initializeCondition(String workflowId, String conditionIdentifier) {
+        Condition condition = NimbleWorkflow.repository.getCondition(workflowId, conditionIdentifier);
         if (condition == null) {
             NimbleWorkflow.repository.newConditionWaiting(workflowId, conditionIdentifier);
             condition = NimbleWorkflow.repository.getCondition(workflowId, conditionIdentifier);
         }
-        if (condition.isSatisfied()) {
-            System.out.println("condition has been previously satisfied");
-            return;
-        }
-
-        if (conditionSupplier.get()) {
-            NimbleWorkflow.repository.conditionSatisfied(workflowId, conditionIdentifier);
-            return;
-        }
-        Workflow workflow = NimbleWorkflow.repository.getWorkflow(workflowId);
-        WaitForConditionTaskInput input = new WaitForConditionTaskInput(
-                workflow.className(), workflowId, Duration.ofSeconds(3));
-        scheduler.schedule(SchedulerConfig.WAIT_FOR_CONDITION_TASK.instance(
-                conditionKey, input), Instant.now().plus(Duration.ofSeconds(3)));
-        throw new ConditionNotSatisfiedException("workflow condition [%s] was not satisfied".formatted(conditionKey));
-
+        return condition;
     }
 
     private void _sleep(String identifier, Duration duration) {
         String workflowId = WorkflowExecutor.workflowId.get();
+        logger.atFine().log("processing workflow sleep [%s::%s]".formatted(workflowId, identifier));
         Sleep sleep = NimbleWorkflow.repository.getSleep(workflowId, identifier);
         if (sleep == null) {
             NimbleWorkflow.repository.newSleepStarted(workflowId, identifier, duration);
-
-            Workflow workflow = NimbleWorkflow.repository.getWorkflow(workflowId);
-            CompleteSleepTaskInput input = new CompleteSleepTaskInput(workflow.className(), workflowId, identifier);
+            logger.atInfo().log("scheduling wake-up-call for sleep [%s::%s] in [%s]", workflowId, identifier, duration);
+            CompleteSleepTaskInput input = new CompleteSleepTaskInput(workflowId, identifier);
             scheduler.schedule(SchedulerConfig.COMPLETE_SLEEP_TASK.instance(
-                    "sleep::%s::".formatted(workflowId, identifier),
-                    input
+                    "sleep::%s::".formatted(workflowId, identifier), input
             ), Instant.now().plus(duration));
-            throw new WorkflowSleepingException("workflow [%s] is sleeping [%s] for [%s]".formatted(workflowId, identifier, duration));
+            throw new WorkflowSleepingException(identifier, duration);
         }
         if (sleep.isCompleted()) {
+            logger.atInfo().log("workflow has completed sleep [%s::%s]".formatted(workflowId, identifier));
             return;
         }
+
+        // If a sleeping workflow was signaled, it needs to continue sleeping until its wakeup call
         Duration elapsedSleepTime = Duration.ofMillis(Instant.now().toEpochMilli() - sleep.started().timestamp().toEpochMilli());
-        throw new WorkflowSleepingException("workflow [%s] has been sleeping [%s] for [%s] out of [%s]".formatted(
-                workflowId,
-                identifier,
-                elapsedSleepTime,
-                duration
-        ));
+        throw new WorkflowStillSleepingException(identifier, elapsedSleepTime, duration);
     }
 
     private <R extends Serializable> CompletableFuture<R> _async(Supplier<R> supplier) {
@@ -130,9 +136,10 @@ public class WorkflowFunctions {
 
     private <T> T _awaitSignal(String signalName, Class<T> returnType) {
         String workflowId = WorkflowExecutor.workflowId.get();
-
+        logger.atFine().log("processing signal [%s::%s]", workflowId, signalName);
         Signal signal = NimbleWorkflow.repository.getSignal(workflowId, signalName);
         if (signal == null) {
+            logger.atInfo().log("waiting for signal [%s::%s]", workflowId, signalName);
             NimbleWorkflow.repository.newSignalWaiting(workflowId, signalName);
             throw new AwaitingSignalException(signalName);
         }
@@ -140,6 +147,8 @@ public class WorkflowFunctions {
             return (T) signal.value();
         }
 
+        // If a workflow woke from sleep, but is still waiting for a signal
+        logger.atInfo().log("still waiting for signal [%s::%s]", workflowId, signalName);
         throw new AwaitingSignalException(signalName);
     }
 
@@ -176,9 +185,9 @@ public class WorkflowFunctions {
 
     private Activity initActivity(String workflowId, String activityName) {
         Activity activity = NimbleWorkflow.repository.getActivity(workflowId, activityName);
-        logger.atInfo().log("starting workflow activity [%s::%s]", workflowId, activityName);
+        logger.atFine().log("processing workflow activity [%s::%s]", workflowId, activityName);
         if (activity == null) {
-            logger.atInfo().log("registering new activity [%s::%s] for initial execution", workflowId, activityName);
+            logger.atInfo().log("starting activity [%s::%s]", workflowId, activityName);
             NimbleWorkflow.repository.newActivityStarted(workflowId, activityName);
             activity = NimbleWorkflow.repository.getActivity(workflowId, activityName);
         }
@@ -187,7 +196,7 @@ public class WorkflowFunctions {
 
     private boolean activityHasAlreadyExecuted(Activity activity) {
         if (activity.isCompleted()) {
-            logger.atInfo().log("activity [%s] completed with result from prior execution", activity.key());
+            logger.atInfo().log("skipping previously executed activity [%s]", activity.key());
             return true;
         }
         return false;
@@ -195,7 +204,7 @@ public class WorkflowFunctions {
 
     private <R extends Serializable> void completeActivity(Activity activity, R output) {
         NimbleWorkflow.repository.completeActivity(activity.workflowId(), activity.name(), output);
-        logger.atInfo().log("activity [%s] completed for the first time", activity.key());
+        logger.atInfo().log("completing activity [%s]", activity.key());
     }
 
 }

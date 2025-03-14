@@ -21,7 +21,7 @@ public class ExampleWorkflowWithNestedActivities implements RunnableWorkflow<Int
                 System.out.println("starting sub activity 1");
                 sleep("nap time", Duration.ofSeconds(2));
                 activity("sub sub activity 1.1", () -> {
-                    awaitCondition("wait for counter", () -> execCount.getAndIncrement() > 2);
+                    awaitCondition("wait for counter", () -> execCount.getAndIncrement() > 2, Duration.ofSeconds(3));
                     System.out.println("starting and ending sub sub 1.1");
                 });
                 activity("sub activity 2", () -> {

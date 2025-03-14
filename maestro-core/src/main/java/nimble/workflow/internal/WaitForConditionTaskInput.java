@@ -5,7 +5,6 @@ import java.time.Duration;
 
 public record WaitForConditionTaskInput(
         String workflowClassName,
-        String workflowId,
-        Duration pollRate
+        String workflowId
 ) implements Serializable {
 }
