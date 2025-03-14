@@ -3,16 +3,20 @@ package lucidity.maestro.engine.internal;
 import lucidity.maestro.engine.api.Maestro;
 import lucidity.maestro.engine.api.activity.Activity;
 import lucidity.maestro.engine.api.activity.ActivityOptions;
+import lucidity.maestro.engine.api.signal.SignalFunction;
 import lucidity.maestro.engine.api.throwable.UnregisteredWorkflowException;
-import lucidity.maestro.engine.api.workflow.Workflow;
+import lucidity.maestro.engine.api.workflow.RunnableWorkflow;
+import lucidity.maestro.engine.api.workflow.WorkflowActions;
 import lucidity.maestro.engine.api.workflow.WorkflowOptions;
 import lucidity.maestro.engine.internal.dto.WorkflowContext;
 import lucidity.maestro.engine.internal.entity.EventEntity;
+import lucidity.maestro.engine.internal.entity.EventModel;
 import lucidity.maestro.engine.internal.handler.ActivityInvocationHandler;
-import lucidity.maestro.engine.internal.handler.WorkflowInvocationHandler;
 import lucidity.maestro.engine.internal.repo.EventRepo;
 import lucidity.maestro.engine.internal.util.Json;
 import lucidity.maestro.engine.internal.util.Util;
+import net.bytebuddy.ByteBuddy;
+import net.bytebuddy.implementation.MethodDelegation;
 
 import javax.sql.DataSource;
 import java.lang.reflect.Field;
@@ -27,24 +31,55 @@ import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import static net.bytebuddy.matcher.ElementMatchers.isAnnotatedWith;
+import static net.bytebuddy.matcher.ElementMatchers.named;
+
 public class MaestroImpl implements Maestro {
     private final Map<Class<?>, Object> typeToActivity = new HashMap<>();
-    private final Map<String, Class<?>> simpleNameToWorkflowImplType = new HashMap<>();
+    private final Map<String, Class<? extends RunnableWorkflow>> simpleNameToWorkflowImplType = new HashMap<>();
     private final ExecutorService executor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     private final EventRepo eventRepo;
 
-    private final Workflow workflowActions;
+    private final WorkflowActions workflowActions;
 
     public MaestroImpl(EventRepo eventRepo, DataSource dataSource) {
-        this.workflowActions = new Workflow.WorkflowImpl(this, eventRepo, dataSource);
+        this.workflowActions = new WorkflowActions.WorkflowActionsImpl(this, eventRepo, dataSource);
         this.eventRepo = eventRepo;
     }
 
-    public void registerWorkflowImplementationTypes(Class<?>... workflows) {
-
-        Arrays.stream(workflows)
-                .forEach(workflow -> simpleNameToWorkflowImplType.put(workflow.getSimpleName(), workflow));
+    public List<EventModel> getWorkflowEvents(String workflowId) {
+        return eventRepo.get(workflowId);
     }
+
+    public void registerWorkflowImplementationTypes(Class<? extends RunnableWorkflow>... workflowImplementationClasses) {
+
+        Arrays.stream(workflowImplementationClasses)
+                .forEach(workflowImplementationClass -> simpleNameToWorkflowImplType.put(workflowImplementationClass.getSimpleName(), workflowImplementationClass));
+    }
+
+//    private <T extends Class<RunnableWorkflow>> T instrumentClass(T clazz) {
+//        try {
+//            new ByteBuddy()
+//                    .subclass(clazz)
+//                    .defineConstructor(Opcodes.ACC_PUBLIC)
+//                    .withParameters(WorkflowOptions.class)
+//                    .intercept(MethodCall.invoke(Object.class.getConstructor()).andThen(FieldAccessor.ofField("_workflowOptions").setsArgumentAt(0)))
+//                    .defineField("_workflowOptions", WorkflowOptions.class, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL)
+//                    .method(named("execute"))
+//                    .intercept(
+//                            MethodDelegation.to(
+//                                    new WorkflowExecutionInterceptor(workflowOptions, eventRepo, executor)
+//                            )
+//                    )
+//    //                .method(isAnnotatedWith(SignalFunction.class))
+//    //                .intercept(MethodDelegation.to(new WorkflowSignalInterceptor()))
+//                    .make()
+//                    .load(getClass().getClassLoader())
+//                    .getLoaded();
+//        } catch (NoSuchMethodException e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 
     @Override
     public void registerActivity(Object activity) {
@@ -56,28 +91,38 @@ public class MaestroImpl implements Maestro {
     }
 
     @Override
-    public Workflow workflowActions() {
+    public WorkflowActions workflowActions() {
         return this.workflowActions;
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> T newWorkflow(Class<T> clazz, WorkflowOptions options) {
+
+    public <T extends RunnableWorkflow> T newWorkflow(Class<T> clazz, WorkflowOptions workflowOptions) {
         if (simpleNameToWorkflowImplType.get(clazz.getSimpleName()) == null) {
             throw new UnregisteredWorkflowException(clazz);
         }
 
-        T instance = Util.createInstance(clazz);
-        populateAnnotatedFields(instance);
-        Class<?> interfaceClass = Util.getWorkflowInterface(clazz);
+        T instance = Util.createInstance(new ByteBuddy()
+                .subclass(clazz)
+                .method(named("execute"))
+                .intercept(
+                        MethodDelegation.to(
+                                new WorkflowExecutionInterceptor(workflowOptions, eventRepo)
+                        )
+                )
+                .method(isAnnotatedWith(SignalFunction.class))
+                .intercept(MethodDelegation.to(new WorkflowSignalMethodInterceptor(eventRepo, workflowOptions, executor)))
+                .make()
+                .load(getClass().getClassLoader())
+                .getLoaded());
 
-        return (T) Proxy.newProxyInstance(
-                clazz.getClassLoader(),
-                new Class<?>[]{interfaceClass},
-                new WorkflowInvocationHandler(instance, options, eventRepo, executor)
-        );
+        populateSuperclassAnnotatedFields(instance);
+
+        return instance;
+
+
     }
 
-    public Class<?> getWorkflowImplType(String simpleName) {
+    public Class<? extends RunnableWorkflow> getWorkflowImplType(String simpleName) {
         return simpleNameToWorkflowImplType.get(simpleName);
     }
 
@@ -88,6 +133,16 @@ public class MaestroImpl implements Maestro {
                 new Class<?>[]{Util.getActivityInterface(instance.getClass())},
                 new ActivityInvocationHandler(instance, options, this, eventRepo)
         );
+    }
+
+    private void populateSuperclassAnnotatedFields(Object instance) {
+        Field[] fields = instance.getClass().getSuperclass().getDeclaredFields();
+        for (Field field : fields) {
+            if (field.isAnnotationPresent(Activity.class)) {
+                Object activity = typeToActivity.get(field.getType());
+                Util.setField(field, instance, activity);
+            }
+        }
     }
 
     private void populateAnnotatedFields(Object instance) {
@@ -101,7 +156,7 @@ public class MaestroImpl implements Maestro {
     }
 
     public void replayWorkflow(EventEntity workflowStartedEvent) {
-        Class<?> workflowClass = getWorkflowImplType(workflowStartedEvent.className());
+        Class<? extends RunnableWorkflow> workflowClass = getWorkflowImplType(workflowStartedEvent.className());
         Method workflowMethod = Util.findWorkflowMethod(workflowClass);
 
         Type[] paramTypes = workflowMethod.getGenericParameterTypes();
@@ -112,9 +167,9 @@ public class MaestroImpl implements Maestro {
                 .orElse(Util.getDefaultArgs(paramTypes.length));
 
         WorkflowOptions workflowOptions = Json.deserialize(workflowStartedEvent.metadata(), WorkflowOptions.class);
-        Object proxy = newWorkflow(workflowClass, workflowOptions);
+        RunnableWorkflow proxy = newWorkflow(workflowClass, workflowOptions);
 
-        executor.submit(() -> workflowMethod.invoke(proxy, finalArgs));
+        executor.submit(() -> proxy.execute(finalArgs[0]));
     }
 
     public void applySignals(WorkflowContext workflowContext, Long nextSequenceNumber) {
@@ -133,7 +188,9 @@ public class MaestroImpl implements Maestro {
                     .orElse(Util.getDefaultArgs(paramTypes.length));
 
             try {
+                WorkflowSignalMethodInterceptor.callSuper.set(true);
                 signalMethod.invoke(workflow, finalArgs);
+                WorkflowSignalMethodInterceptor.callSuper.set(false);
             } catch (RuntimeException e) {
                 throw e;
             } catch (Exception e) {

@@ -13,6 +13,7 @@ import lucidity.maestro.engine.internal.repo.EventRepo;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.lang.reflect.Type;
 import java.util.Arrays;
 import java.util.List;
@@ -47,14 +48,11 @@ public class Util {
     }
 
     public static Method findWorkflowMethod(Class<?> clazz) {
-        for (Class<?> iface : clazz.getInterfaces()) {
-            for (Method method : iface.getMethods()) {
-                if (method.isAnnotationPresent(WorkflowFunction.class)) {
-                    return method;
-                }
-            }
-        }
-        return null;
+        return Arrays.stream(clazz.getMethods())
+                .filter(method -> "execute".equals(method.getName()))
+                .filter(method -> !Modifier.isVolatile(method.getModifiers()))
+                .findFirst()
+                .orElseThrow();
     }
 
     public static Object[] getDefaultArgs(Integer numberOfParameters) {

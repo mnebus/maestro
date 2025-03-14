@@ -96,6 +96,7 @@ public class Sleep {
     private Scheduler initializeScheduler(DataSource dataSource) {
         Scheduler scheduler = Scheduler
                 .create(dataSource, task)
+                .pollingInterval(Duration.ofSeconds(1))
                 .registerShutdownHook()
                 .build();
 
