@@ -52,3 +52,7 @@ tasks.withType<Test> {
     testLogging.showStandardStreams = project.hasProperty("stdout")
     useJUnitPlatform()
 }
+
+tasks.jar {
+    exclude("logback.xml")
+}
