@@ -58,6 +58,7 @@ public class SchedulerConfig {
             Object output = instance.execute(workflow.input());
             WorkflowExecutor.workflowId.remove();
             NimbleWorkflow.repository.workflowCompleted(workflowId, output);
+            logger.atInfo().log("Workflow [%s] is complete", workflowId);
         } catch (AwaitingSignalException e) {
             logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowId, e.getSignal());
         } catch (WorkflowStillSleepingException e) {
@@ -65,7 +66,7 @@ public class SchedulerConfig {
         } catch (WorkflowSleepingException e) {
             logger.atInfo().log("Pausing execution of workflow [%s] to sleep [%s] for [%s]", workflowId, e.getIdentifier(), e.getNapTime());
         } catch (ConditionNotSatisfiedException e) {
-            logger.atInfo().log("Pausing execution of workflow [%s] because condition [%s] is not satisfied",workflowId, e.getIdentifier());
+            logger.atInfo().log("Pausing execution of workflow [%s] because condition [%s] is not satisfied", workflowId, e.getIdentifier());
         } catch (Exception e) {
             //TODO -- handle unexpected/unhandled failure encountered while evaluating workflow
             // this should not re-throw an exception, it should handle them all

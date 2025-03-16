@@ -92,6 +92,7 @@ public class NimbleWorkflow {
         }
 
         public NimbleWorkflow start() {
+            //TODO -- null check this.dataSource
             runDatabaseMigration(this.dataSource);
 
             SchedulerConfig.initialize(this.workflowDependencies);
@@ -104,7 +105,9 @@ public class NimbleWorkflow {
             WorkflowExecutor executor = new WorkflowExecutor(scheduler);
             NimbleWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
             WorkflowFunctions.initialize(scheduler);
-            //TODO -- null check this.dataSource
+
+            // start this (last) after the rest of the app is completely initialized
+            this.scheduler.start();
             return new NimbleWorkflow(executor, this);
         }
 
@@ -112,11 +115,8 @@ public class NimbleWorkflow {
             Scheduler scheduler = Scheduler
                     .create(dataSource, tasks)
                     .pollingInterval(Duration.ofSeconds(1))
-                    .registerShutdownHook()
                     .enableImmediateExecution()
                     .build();
-
-            scheduler.start();
 
             return scheduler;
         }

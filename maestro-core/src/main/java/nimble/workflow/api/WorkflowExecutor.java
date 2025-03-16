@@ -40,7 +40,7 @@ public class WorkflowExecutor {
 
     }
 
-    public <P> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
+    public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
         logger.atInfo().log("scheduling new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
         NimbleWorkflow.repository.newWorkflowScheduled(workflowId, workflowClass, workflowParam);
         TaskInstance<StartWorkflowTaskInput> instance = SchedulerConfig.RUN_WORKFLOW_TASK.instance(
